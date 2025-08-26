@@ -1,0 +1,7 @@
+{
+  "name": "Universe Wallet",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "angular"
+}
