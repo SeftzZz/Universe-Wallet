@@ -31,8 +31,26 @@
                 "output": "./svg"
               }
             ],
-            "styles": ["src/global.scss", "src/theme/variables.scss"],
-            "scripts": []
+            "styles": [
+              {
+                "input": "src/theme/variables.scss",
+              },
+              {
+                "input": "src/global.scss"
+              },
+            ],
+            "scripts": [],
+            "allowedCommonJsDependencies": [
+              "@solana/buffer-layout",
+              "bigint-buffer",
+              "bn.js",
+              "borsh",
+              "bs58",
+              "jayson/lib/client/browser",
+              "rpc-websockets",
+              "rpc-websockets/dist/lib/client",
+              "rpc-websockets/dist/lib/client/websocket.browser"
+            ]
           },
           "configurations": {
             "production": {
@@ -111,8 +129,28 @@
                 "output": "./svg"
               }
             ],
-            "styles": ["src/global.scss", "src/theme/variables.scss"],
-            "scripts": []
+            "styles": [
+              "src/assets/css/style.css",
+              "src/assets/css/responsive.css"
+            ],
+            "scripts": [
+              "src/assets/js/jquery.min.js",
+              "src/assets/js/popper.min.js",
+              "src/assets/js/bootstrap.min.js",
+              "src/assets/js/swiper-bundle.min.js",
+              "src/assets/js/swiper.js",
+              "src/assets/js/countto.js",
+              "src/assets/js/count-down.js",
+              "src/assets/js/simpleParallax.min.js",
+              "src/assets/js/gsap.js",
+              "src/assets/js/SplitText.js",
+              "src/assets/js/wow.min.js",
+              "src/assets/js/ScrollTrigger.js",
+              "src/assets/js/gsap-animation.js",
+              "src/assets/js/tsparticles.min.js",
+              "src/assets/js/tsparticles.js",
+              "src/assets/js/main-template.js"
+            ]
           },
           "configurations": {
             "ci": {

@@ -1,0 +1,103 @@
+<div id="wrapper">
+  <div id="page" class="pt-40">
+
+      <div class="tf-section-2 pt-60 widget-box-icon">
+          <div class="themesflat-container w920">
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="heading-section-1">
+                        <h2 class="tf-title pb-16">Create you account</h2>
+                        <p class="pb-40">Let’s get started with your 30 days free trial</p>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="widget-login">
+                        <form (submit)="onRegister($event)" class="comment-form">
+                          <fieldset class="name">
+                            <label>Name *</label>
+                            <input
+                              type="text"
+                              id="name"
+                              placeholder="Your name*"
+                              name="name"
+                              [(ngModel)]="name"
+                              required
+                            />
+                          </fieldset>
+
+                          <fieldset class="email">
+                            <label>Email *</label>
+                            <input
+                              type="email"
+                              id="email"
+                              placeholder="mail@website.com"
+                              name="email"
+                              [(ngModel)]="email"
+                              required
+                            />
+                          </fieldset>
+
+                          <fieldset class="password">
+                            <label>Password *</label>
+                            <input
+                              class="password-input"
+                              type="password"
+                              id="password"
+                              placeholder="Min. 8 characters"
+                              name="password"
+                              [(ngModel)]="password"
+                              required
+                            />
+                            <i class="icon-show password-addon" id="password-addon"></i>
+                          </fieldset>
+
+                          <fieldset class="password">
+                            <label>Confirm password *</label>
+                            <input
+                              class="password-input"
+                              type="password"
+                              id="confirmPassword"
+                              placeholder="Confirm password"
+                              name="confirmPassword"
+                              [(ngModel)]="confirmPassword"
+                              required
+                            />
+                            <i class="icon-show password-addon" id="password-addon"></i>
+
+                            <div class="widget-category-checkbox">
+                              <label>
+                                I agree to all Terms, Privacy Policy and fees
+                                <input type="checkbox" name="acceptedTerms" [(ngModel)]="acceptedTerms" />
+                                <span class="btn-checkbox"></span>
+                              </label>
+                            </div>
+                          </fieldset>
+
+                          <div class="btn-submit mb-30">
+                            <button class="tf-button style-1 h50 w-100" type="submit">
+                              Sign up <i class="icon-arrow-up-right2"></i>
+                            </button>
+                          </div>
+                        </form>
+                        <div class="other">or continue</div>
+                        <div class="login-other">
+                            <a href="#" class="login-other-item">
+                                <img src="assets/images/google.png" alt="">
+                                <span>Sign up with google</span>
+                            </a>
+                            <a href="#" class="login-other-item">
+                                <img src="assets/images/box-icon/wallet-05.png" alt="" style="height: 25px;">
+                                <span>Sign up with phantom</span>
+                            </a>
+                        </div>
+                        <div class="no-account">Already have an account?  <a [routerLink]="['/login']" class="tf-color">Log in</a></div>
+                    </div>
+                </div>
+            </div>
+          </div>
+      </div>
+  </div>
+  <!-- /#page -->
+
+</div>
+<!-- /#wrapper -->

@@ -1,0 +1,477 @@
+<div id="wrapper">
+    <div id="page" class="pt-40 home-1">
+
+        <div class="flat-pages-title">
+            <div class="widget-bg-line">
+                <div class="wraper">
+                    <div class="bg-grid-line y bottom">
+                        <div class="bg-line"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="themesflat-container w1490">
+                <div class="row">
+                    <div class="col-12 pages-title">
+                        <div class="content">
+                            <h1 *ngIf="balance !== null">
+                              <span [countUp]="balance" suffix=" SOL" [duration]="2000"></span>
+                            </h1>
+
+                            <h4 class="pb-10" *ngIf="balanceUsd !== null" id="balanceUsdValue">
+                              <span [countUp]="balanceUsd" prefix="$" [duration]="2000"></span>
+                              <span [ngClass]="trend > 0 ? 'warning' : (trend < 0 ? 'danger' : '')">
+                                {{ trend > 0 ? '+' : ''}}{{ percentChange | number:'1.2-2' }}%
+                              </span>
+                              <i [ngClass]="trend > 0 ? 'icon-arrow-up2 warning' : (trend < 0 ? 'icon-arrow-down2 danger' : '')"></i>
+                            </h4>
+                            <ul class="widget-menu-tab">
+                                <li class="item-title" (click)="toggleReceiveSheet()">
+                                    <i class="icon-arrow-down2"></i>
+                                    <br>Receive
+                                </li>
+                                <li class="item-title" (click)="toggleSendModal()">
+                                    <i class="icon-arrow-up2"></i>
+                                    <br>Send
+                                </li>
+                                <li class="item-title" (click)="toggleSwapModal()">
+                                  <i class="icon-create"></i>
+                                  <br>Swap
+                                </li>
+                                <li class="item-title" (click)="toggleBuyModal()">
+                                    $
+                                    <br>Buy
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="icon-background">
+                            <img class="absolute item1" src="assets/images/item-background/item1.png" alt="">
+                            <img class="absolute item4" src="assets/images/item-background/item1.png" alt="">
+                            <img class="absolute item5" src="assets/images/item-background/item1.png" alt="">
+                            <img class="absolute item8" src="assets/images/item-background/item5.png" alt="">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tf-section-2 ranking">
+          <div class="themesflat-container">
+              <div class="row">
+                  <div class="col-12 mb-30">
+                      <div class="widget-tabs relative">
+                          <ul class="widget-menu-tab">
+                              <li class="item-title active">
+                                  <span class="inner">Tokens</span>
+                              </li>
+                              <li class="item-title">
+                                  <span class="inner">Collectibles</span>
+                              </li>
+                          </ul>
+                          <div class="widget-content-tab pt-10">
+                              <div class="widget-content-inner active">
+                                  <div class="widget-table-ranking" *ngIf="tokens.length > 0">
+                                      <div class="table-ranking-content" *ngFor="let token of tokens">
+                                          <div data-wow-delay="0s" class="fl-row-ranking" [routerLink]="['/tabs/token', token.mint]">
+                                              <div class="td1">
+                                                  <div class="item-avatar">
+                                                      <img src="{{ token.logoURI }}" alt="">
+                                                  </div>
+                                                  <div class="item-name">
+                                                      {{ shorten(token.symbol) }}
+                                                      <h6 class="price gem pt-10" [countUp]="token.amount">
+                                                          {{ token.amount }}
+                                                      </h6>
+                                                  </div>
+                                              </div>
+                                              <div class="td5">
+                                                  <h6 class="price gem">
+                                                      ${{ token.usdValue }}
+                                                      <div class="td4 warning pt-10">
+                                                          <span [ngClass]="token.trend > 0 ? 'warning' : (token.trend < 0 ? 'danger' : '')">
+                                                            {{ token.trend > 0 ? '+' : ''}}{{ token.percentChange | number:'1.2-2' }}%
+                                                          </span>
+                                                          <i [ngClass]="token.trend > 0 ? 'icon-arrow-up2 warning' : (token.trend < 0 ? 'icon-arrow-down2 danger' : '')"></i>
+                                                      </div>
+                                                  </h6>
+                                              </div>
+                                          </div>
+                                      </div>
+                                  </div>
+                              </div>
+                              <div class="widget-content-inner">
+                                  <div class="wrap-box-card" *ngIf="nfts.length > 0">
+                                      <div class="col-item" *ngFor="let nft of nfts">
+                                          <div class="tf-card-box style-1">
+                                              <div class="card-media">
+                                                  <a href="javascript:void(0)" (click)="walletNft()">
+                                                      <!-- <img [src]="nft.image" alt="{{nft.name}}"> -->
+                                                      <img src="assets/images/box-item/card-item-04.jpg" alt="">
+                                                  </a>
+                                                  <span class="wishlist-button icon-heart"></span>
+                                                  <div class="button-place-bid">
+                                                      <a href="javascript:void(0)" (click)="walletNft()" class="tf-button">
+                                                        <span>Detail</span>
+                                                      </a>
+                                                  </div>
+                                              </div>
+                                              <h5 class="name"><a href="nft-detail-2.html">{{ nft.name }}</a></h5>
+                                              <h6 class="price gem pt-10" [countUp]="nft.price" suffix=" SOL" [duration]="2000">{{ nft.price }}</h6>
+                                          </div>
+                                      </div>
+                                  </div>
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+          </div>
+        </div>
+    </div>
+    <!-- /#page -->
+
+    <!-- Modal Popup Bid -->
+    <div class="modal fade popup" id="popup_bid" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <div class="modal-body">
+                    <div class="image">
+                        <img src="assets/images/backgroup-section/popup.png" alt="">
+                    </div>
+                    <div class="logo-rotate">
+                        <img class="" src="assets/images/item-background/item6-img.png" alt="">
+                    </div>
+                    <h2>Subscribe to our newsletter</h2>
+                    <p>Subscribe for our newsletter to stay in the loop</p>
+                    <fieldset class="email">
+                        <input type="email" class="style-1" id="email" placeholder="Email address*" name="email" tabindex="2" value="" aria-required="true" required="">
+                    </fieldset>
+                    <a href class="tf-button style-1 h50">Subscribe<i class="icon-arrow-up-right2"></i></a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Action sheet --> 
+    <div class="custom-action-sheet" *ngIf="showReceiveSheet">
+      <div class="sheet-backdrop" (click)="toggleReceiveSheet()"></div>
+      <div class="sheet-container" [ngClass]="{ 'slide-up': !isClosing, 'slide-down': isClosing }">
+        <h3>Receive Address</h3>
+        <p>{{ userAddress }}</p>
+
+        <!-- ✅ QR Code -->
+        <div class="qrcodeImage">
+          <qrcode 
+            [qrdata]="userAddress"
+            [allowEmptyString]="true"
+            [ariaLabel]="'QR Code image with the following content...'"
+            [cssClass]="'demoBorderRadius'"
+            [colorDark]="'#000000ff'"
+            [colorLight]="'#ffffffff'"
+            [elementType]="'canvas'"
+            [errorCorrectionLevel]="'M'"
+            [imageSrc]="'assets/images/app-logo.png'"
+            [imageHeight]="75"
+            [imageWidth]="75"
+            [margin]="4"
+            [scale]="1"
+            [title]="userAddress"
+            [width]="300">
+          </qrcode>
+        </div>
+
+        <button (click)="copyAddress()">Copy Address</button>
+        <button class="cancel" (click)="toggleReceiveSheet()">Cancel</button>
+      </div>
+    </div>
+
+    <div class="custom-modal" *ngIf="showSendModal">
+      <div class="modal-backdrop" (click)="resetSendModal()"></div>
+
+      <div class="modal-sheet" [ngClass]="{ 'slide-up': !isClosingSend, 'slide-down': isClosingSend }">
+
+        <!-- Step 1: Pilih Token -->
+        <div *ngIf="!selectedToken">
+          <h2 class="modal-title">Select Token to Send</h2>
+
+          <!-- 🔍 Search bar -->
+          <form action="#" method="get" role="search" class="search-form relative" (submit)="$event.preventDefault()">
+            <input
+              type="search"
+              id="search"
+              class="search-field style-1"
+              placeholder="Search..."
+              [(ngModel)]="tokenSearch"
+              name="tokenSearch"
+              title="Search for"
+            />
+            <button class="search search-submit" type="submit" title="Search">
+              <i class="icon-search"></i>
+            </button>
+          </form>
+
+          <!-- List token pakai template ranking -->
+          <div class="widget-table-ranking pb-20" *ngIf="filteredTokens.length > 0">
+            <div class="table-ranking-content" *ngFor="let token of filteredTokens" (click)="selectToken(token)">
+              <div data-wow-delay="0s" class="fl-row-ranking">
+                <div class="td1">
+                  <div class="item-avatar">
+                    <img [src]="token.logoURI || 'assets/images/box-item/rank-01.jpg'" alt="{{token.symbol}}">
+                  </div>
+                  <div class="item-name">
+                    {{ token.symbol }}
+                    <h6 class="price gem pt-10">{{ token.amount }}</h6>
+                  </div>
+                </div>
+                <div class="td5">
+                  <h6 class="price gem">
+                    ${{ token.usdValue }}
+                    <div class="td4 warning pt-10">
+                      <span [ngClass]="token.trend > 0 ? 'warning' : (token.trend < 0 ? 'danger' : '')">
+                        {{ token.trend > 0 ? '+' : ''}}{{ token.percentChange | number:'1.2-2' }}%
+                      </span>
+                      <i [ngClass]="token.trend > 0 ? 'icon-arrow-up2 warning' : (token.trend < 0 ? 'icon-arrow-down2 danger' : '')"></i>
+                    </div>
+                  </h6>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Kalau hasil kosong -->
+          <div class="no-result" *ngIf="filteredTokens.length === 0">
+            No tokens found
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" class="btn-cancel" (click)="resetSendModal()">Cancel</button>
+          </div>
+        </div>
+
+        <!-- Step 2: Form input -->
+        <div *ngIf="selectedToken && !isSending && !txSig">
+          <h2 class="modal-title">Send {{ selectedToken.symbol }}</h2>
+
+          <form (submit)="sendToken($event)">
+            <div class="form-group">
+              <label for="recipient">Recipient Address</label>
+              <input
+                type="text"
+                id="recipient"
+                class="search-field style-1"
+                placeholder="Address..."
+                [(ngModel)]="recipient"
+                name="recipient"
+                required
+                title="Address"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="amount">Amount ({{ selectedToken.symbol }})</label>
+              <input
+                type="number"
+                id="amount"
+                class="search-field style-1"
+                placeholder="0"
+                [(ngModel)]="amount"
+                name="amount"
+                required 
+                min="0"
+                title="Amount"
+                [max]="selectedToken.amount"
+              />
+              <small class="balance-info">
+                Balance: {{ selectedToken.amount }} {{ selectedToken.symbol }}
+              </small>
+            </div>
+
+            <div class="modal-actions">
+              <button type="button" class="btn-cancel" (click)="selectedToken = null">
+                Back
+              </button>
+              <button
+                type="submit"
+                class="btn-send"
+                [disabled]="!recipient || !amount || amount <= 0 || amount > selectedToken.amount"
+              >
+                Send
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Step 3: Loading / Success -->
+        <div *ngIf="selectedToken && (isSending || txSig)" 
+             @fadeSlide>
+          <h2 class="modal-title" *ngIf="isSending">Processing Transaction...</h2>
+          <div *ngIf="isSending" class="loading-spinner">
+            <ion-spinner name="crescent"></ion-spinner>
+          </div>
+
+          <div *ngIf="txSig" class="success-tx" @fadeSlide>
+            <h2 class="modal-title">Transaction Successful</h2>
+            <ion-icon name="checkmark-circle-outline"></ion-icon>
+            <p>You sent {{ amount }} {{ selectedToken?.symbol }} to</p>
+            <p class="addr">{{ recipient }}</p>
+            <a
+              [href]="'https://solscan.io/tx/' + txSig + '?cluster=mainnet'"
+              target="_blank"
+              class="btn-send"
+            >
+              View on Solscan
+            </a>
+            <div class="modal-actions">
+              <button type="button" class="btn-cancel" (click)="resetSendModal()">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- 🔄 Modal Swap -->
+    <div class="custom-modal" *ngIf="showSwapModal">
+      <div class="modal-backdrop" (click)="resetSwapModal()"></div>
+
+      <div class="modal-sheet" [ngClass]="{ 'slide-up': !isClosingSwap, 'slide-down': isClosingSwap }">
+
+        <!-- Step 1: Pilih Token From -->
+        <div *ngIf="!selectedFromToken && !isSwapping && !txSig">
+          <h2 class="modal-title">Select Token to Swap From</h2>
+
+          <!-- 🔍 Search bar (opsional) -->
+          <form action="#" method="get" role="search" class="search-form relative" (submit)="$event.preventDefault()">
+            <input type="search" class="search-field style-1" placeholder="Search..."
+                   [(ngModel)]="swapSearchFrom" name="swapSearchFrom">
+            <button type="submit" class="search search-submit">
+              <i class="icon-search"></i>
+            </button>
+          </form>
+
+          <!-- List token pakai template ranking -->
+          <div class="widget-table-ranking pb-20" *ngIf="tokens.length > 0">
+            <div
+              class="table-ranking-content"
+              *ngFor="let token of tokens | filter:swapSearchFrom"
+              (click)="selectFromToken(token)"
+            >
+              <div data-wow-delay="0s" class="fl-row-ranking">
+                <!-- Kolom kiri: logo + symbol + balance -->
+                <div class="td1">
+                  <div class="item-avatar">
+                    <img [src]="token.logoURI || 'assets/images/default-token.png'" alt="{{ token.symbol }}">
+                  </div>
+                  <div class="item-name">
+                    {{ token.symbol }}
+                    <h6 class="price gem pt-10">{{ token.amount }}</h6>
+                  </div>
+                </div>
+
+                <!-- Kolom kanan: nilai USD + trend -->
+                <div class="td5">
+                  <h6 class="price gem">
+                    ${{ token.usdValue || 0 }}
+                    <div class="td4 warning pt-10">
+                      <span
+                        [ngClass]="token.trend > 0 ? 'warning' : (token.trend < 0 ? 'danger' : '')"
+                      >
+                        {{ token.trend > 0 ? '+' : ''}}{{ token.percentChange | number:'1.2-2' }}%
+                      </span>
+                      <i
+                        [ngClass]="
+                          token.trend > 0
+                            ? 'icon-arrow-up2 warning'
+                            : (token.trend < 0 ? 'icon-arrow-down2 danger' : '')
+                        "
+                      ></i>
+                    </div>
+                  </h6>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" class="btn-cancel" (click)="resetSwapModal()">Cancel</button>
+          </div>
+        </div>
+
+        <!-- Step 2: Pilih Token To -->
+        <div *ngIf="selectedFromToken && !selectedToToken && !isSwapping && !txSig">
+          <h2 class="modal-title">Select Token to Swap To</h2>
+
+          <form action="#" method="get" role="search" class="search-form relative" (submit)="$event.preventDefault()">
+            <input type="search" class="search-field style-1" placeholder="Search..."
+                   [(ngModel)]="swapSearchTo" name="swapSearchTo">
+            <button type="submit" class="search search-submit">
+              <i class="icon-search"></i>
+            </button>
+          </form>
+
+          <div class="token-list">
+            <div class="token-item" *ngFor="let token of tokens | filter:swapSearchTo"
+                 (click)="selectToToken(token)">
+              <img [src]="token.logoURI || 'assets/images/default-token.png'" alt="{{token.symbol}}" class="token-logo">
+              <div class="token-info">
+                <strong>{{ token.symbol }}</strong>
+                <small>{{ token.amount }}</small>
+              </div>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button class="btn-cancel" (click)="selectedFromToken = null">Back</button>
+          </div>
+        </div>
+
+        <!-- Step 3: Input Amount -->
+        <div *ngIf="selectedFromToken && selectedToToken && !isSwapping && !txSig">
+          <h2 class="modal-title">
+            Swap {{ selectedFromToken.symbol }} → {{ selectedToToken.symbol }}
+          </h2>
+          <form (submit)="swapTokens($event)">
+            <div class="form-group">
+              <label for="swapAmount">Amount ({{ selectedFromToken.symbol }})</label>
+              <input type="number" id="swapAmount" [(ngModel)]="swapAmount"
+                     name="swapAmount" required min="0"
+                     class="search-field style-1">
+              <small>{{ selectedFromToken.amount }}</small>
+            </div>
+            <div class="modal-actions">
+              <button type="button" class="btn-cancel" (click)="selectedToToken = null">Back</button>
+              <button type="submit" class="btn-send"
+                      [disabled]="!swapAmount || swapAmount <= 0 || swapAmount > selectedFromToken.amount">
+                Swap
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Step 4: Loading -->
+        <div *ngIf="isSwapping && !txSig" class="step-4">
+          <h2 class="modal-title">Processing Swap...</h2>
+          <ion-spinner name="crescent"></ion-spinner>
+        </div>
+
+        <!-- Step 5: Success -->
+        <div *ngIf="txSig" class="success-tx">
+          <h2 class="modal-title">Swap Successful!</h2>
+          <ion-icon name="checkmark-circle-outline"></ion-icon>
+          <p>You swapped {{ swapAmount }} {{ selectedFromToken.symbol }} → {{ selectedToToken.symbol }}</p>
+          <a [href]="'https://solscan.io/tx/' + txSig + '?cluster=mainnet'" target="_blank" class="btn-send">
+            View on Solscan
+          </a>
+          <div class="modal-actions">
+            <button type="button" class="btn-cancel" (click)="resetSwapModal()">Close</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+</div>
+<!-- /#wrapper -->

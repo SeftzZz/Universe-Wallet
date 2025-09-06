@@ -1,0 +1,75 @@
+<div id="wrapper">
+  <div id="page" class="pt-40">
+    <div class="tf-section-2 pt-60 widget-box-icon">
+      <div class="themesflat-container w920">
+        <div class="row">
+          <div class="col-md-12">
+            <div class="heading-section-1">
+              <h2 class="tf-title pb-16">Login</h2>
+              <p class="pb-40">Get started today by entering just a few details</p>
+            </div>
+          </div>
+          <div class="col-12">
+            <div class="widget-login">
+              <!-- === Form Login Email === -->
+              <form (ngSubmit)="onLogin($event)" id="commentform" class="comment-form">
+                <fieldset class="email">
+                  <label>Email *</label>
+                  <input
+                    type="email"
+                    name="email"
+                    [(ngModel)]="email"
+                    placeholder="mail@website.com"
+                    required
+                  />
+                </fieldset>
+                <fieldset class="password">
+                  <label>Password *</label>
+                  <input
+                    type="password"
+                    name="password"
+                    [(ngModel)]="password"
+                    placeholder="Min. 8 character"
+                    required
+                  />
+                  <i class="icon-show password-addon" id="password-addon"></i>
+                  <div class="forget-password">
+                    <a href="#">Forget password</a>
+                  </div>
+                </fieldset>
+                <div class="btn-submit mb-30">
+                  <button class="tf-button style-1 h50 w-100" type="submit">
+                    Login <i class="icon-arrow-up-right2"></i>
+                  </button>
+                </div>
+              </form>
+
+              <div class="other">or continue</div>
+              <div class="login-other">
+                <a href="#" class="login-other-item" (click)="googleLogin()">
+                  <img src="assets/images/google.png" alt="" />
+                  <span>Log in with Google</span>
+                </a>
+                <a href="#" class="login-other-item" (click)="connectWallet(); $event.preventDefault();">
+                  <img src="assets/images/box-icon/wallet-05.png" alt="" style="height: 25px;" />
+                  <span *ngIf="!userAddress">Log in with Phantom</span>
+                  <span *ngIf="userAddress">Wallet: {{ shorten(userAddress) }}</span>
+                </a>
+                <div *ngIf="userAddress" class="wallet-info mt-3" style="width: 100%;">
+                  <button (click)="disconnectWallet()" class="tf-button style-2 h40 mt-2" style="width: 100%;">
+                    Disconnect Wallet
+                  </button>
+                </div>
+              </div>
+
+              <div class="no-account">
+                Don't have an account?
+                <a (click)="onRegister()" class="tf-color">Sign up</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
