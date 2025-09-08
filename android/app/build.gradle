@@ -1,14 +1,14 @@
 apply plugin: 'com.android.application'
+apply plugin: 'org.jetbrains.kotlin.android'
 
 android {
   namespace "com.universeofgamers.wallet"
-
-  compileSdkVersion rootProject.ext.compileSdk
+  compileSdk rootProject.ext.compileSdk
 
   defaultConfig {
     applicationId "com.universeofgamers.wallet"
     minSdkVersion rootProject.ext.minSdkVersion
-    targetSdk rootProject.ext.targetSdk
+    targetSdkVersion rootProject.ext.targetSdk
     versionCode 1
     versionName "1.0"
     testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
@@ -20,6 +20,10 @@ android {
   compileOptions {
     sourceCompatibility JavaVersion.VERSION_17
     targetCompatibility JavaVersion.VERSION_17
+  }
+
+  kotlinOptions {
+    jvmTarget = "17"
   }
 
   buildTypes {
