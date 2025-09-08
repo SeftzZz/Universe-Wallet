@@ -49,7 +49,11 @@
               "jayson/lib/client/browser",
               "rpc-websockets",
               "rpc-websockets/dist/lib/client",
-              "rpc-websockets/dist/lib/client/websocket.browser"
+              "rpc-websockets/dist/lib/client/websocket.browser",
+              "qrcode",
+              "tweetnacl",
+              "ws",
+              "@solana/web3.js"
             ]
           },
           "configurations": {
@@ -62,8 +66,8 @@
                 },
                 {
                   "type": "anyComponentStyle",
-                  "maximumWarning": "2kb",
-                  "maximumError": "4kb"
+                  "maximumWarning": "10kb",
+                  "maximumError": "15kb"
                 }
               ],
               "fileReplacements": [

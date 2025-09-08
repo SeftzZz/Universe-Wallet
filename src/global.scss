@@ -27,7 +27,7 @@
 
 a {
     background-color: transparent;
-    color: var(--ion-color-light, #DDF247);
+    color: var(--ion-color-light, #3d74fc);
 }
 
 .sc-ion-searchbar-md-h {
@@ -74,6 +74,23 @@ ease 0.3s;
 
 .tf-button.style-1.active:hover {
     background: linear-gradient(45deg, #524afc 0%, #1ac4fc 100%);
+}
+
+.widget-table-ranking .table-ranking-content .fl-row-ranking .td1, .widget-table-ranking .table-ranking-content .fl-row-ranking .td2, .widget-table-ranking .table-ranking-content .fl-row-ranking .td3, .widget-table-ranking .table-ranking-content .fl-row-ranking .td4, .widget-table-ranking .table-ranking-content .fl-row-ranking .td5, .widget-table-ranking .table-ranking-content .fl-row-ranking .td6, .widget-table-ranking .table-ranking-content .fl-row-ranking .td7 {
+    width: 101px;
+    display: flex
+;
+    align-items: center;
+    gap: 14px;
+    color: #fff;
+    font-size: 16px;
+    font-family: 'Azeret Mono';
+    font-weight: 500;
+    line-height: 15px;
+}
+
+#menu-mobile-menu li.current-menu-item > a, #menu-mobile-menu li a:hover, #menu-mobile-menu li.current-item a {
+    color: #3d74fc;
 }
 
 :root {

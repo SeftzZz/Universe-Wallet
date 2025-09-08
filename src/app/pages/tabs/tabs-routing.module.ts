@@ -37,6 +37,14 @@ const routes: Routes = [
         loadChildren: () => import('../token/token.module').then( m => m.TokenPageModule)
       },
       {
+        path: 'offline',
+        loadChildren: () => import('../offline/offline.module').then( m => m.OfflinePageModule)
+      },
+      {
+        path: 'settings',
+        loadChildren: () => import('../settings/settings.module').then( m => m.SettingsPageModule)
+      },
+      {
         path: '',
         redirectTo: '/tabs/home',
         pathMatch: 'full'

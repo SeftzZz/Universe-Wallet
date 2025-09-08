@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { Auth } from '../services/auth';
-import { ToastController } from '@ionic/angular';
+import { ToastController, LoadingController } from '@ionic/angular';
 import { Router } from '@angular/router';
 
 @Component({
@@ -16,10 +16,13 @@ export class RegistrationPage implements OnInit {
   confirmPassword = '';
   acceptedTerms = false;
 
+  private loading: HTMLIonLoadingElement | null = null;
+
   constructor(
     private auth: Auth,
     private toastCtrl: ToastController,
-    private router: Router // ✅ tambahkan Router
+    private loadingCtrl: LoadingController,
+    private router: Router
   ) {}
 
   ngOnInit() {}
@@ -32,6 +35,22 @@ export class RegistrationPage implements OnInit {
       color,
     });
     await toast.present();
+  }
+
+  async presentLoading(message = 'Please wait...') {
+    this.loading = await this.loadingCtrl.create({
+      message,
+      spinner: 'crescent',
+      translucent: true,
+    });
+    await this.loading.present();
+  }
+
+  async dismissLoading() {
+    if (this.loading) {
+      await this.loading.dismiss();
+      this.loading = null;
+    }
   }
 
   clearForm() {
@@ -50,6 +69,8 @@ export class RegistrationPage implements OnInit {
       return;
     }
 
+    this.presentLoading('Sign in...');
+
     const payload = {
       name: this.name,
       email: this.email,
@@ -59,15 +80,33 @@ export class RegistrationPage implements OnInit {
 
     this.auth.register(payload).subscribe({
       next: (res) => {
+        this.dismissLoading();
         console.log('✅ Register success:', res);
 
-        // simpan token + userId
+        // ✅ simpan token + userId
         this.auth.setToken(res.token, res.authId);
+        
+        // ✅ ambil walletAddress (custodial dulu, kalau tidak ada pakai external)
+        let walletAddr = null;
+        if (res.custodialWallets?.length > 0) {
+          walletAddr = res.custodialWallets[0].address;
+        } else if (res.wallets?.length > 0) {
+          walletAddr = res.wallets[0].address;
+        }
 
-        // simpan address wallet (kalau ada di response)
-        if (res.wallet && res.wallet.address) {
-          localStorage.setItem('walletAddress', res.wallet.address);
-          console.log('💾 Wallet address saved:', res.wallet.address);
+        // ✅ simpan ke localStorage
+        localStorage.setItem('userId', res.authId);
+        if (walletAddr) {
+          localStorage.setItem('walletAddress', walletAddr);
+        }
+
+        // setelah dapat response dari backend
+        if (res.wallets || res.custodialWallets) {
+          const allWallets = [
+            ...(res.wallets || []),
+            ...(res.custodialWallets || [])
+          ];
+          localStorage.setItem('wallets', JSON.stringify(allWallets));
         }
 
         this.showToast('Register success 🎉', 'success');
@@ -77,6 +116,7 @@ export class RegistrationPage implements OnInit {
         this.router.navigate(['/tabs/home']);
       },
       error: (err) => {
+        this.dismissLoading();
         console.error('❌ Register failed:', err);
         this.showToast(err.error?.error || 'Register failed', 'danger');
       },
@@ -84,8 +124,11 @@ export class RegistrationPage implements OnInit {
   }
 
   onLogin() {
+    this.presentLoading('Logging in...');
+
     this.auth.login({ email: this.email, password: this.password }).subscribe({
       next: (res) => {
+        this.dismissLoading();
         console.log('✅ Login success:', res);
         this.auth.setToken(res.token, res.authId);
         this.showToast('Login success 🎉', 'success');
@@ -95,6 +138,7 @@ export class RegistrationPage implements OnInit {
         this.router.navigate(['/tabs/home']);
       },
       error: (err) => {
+        this.dismissLoading();
         console.error('❌ Login failed:', err);
         this.showToast(err.error?.error || 'Login failed', 'danger');
       },
@@ -102,18 +146,22 @@ export class RegistrationPage implements OnInit {
   }
 
   onGenerateCustodial() {
+    this.presentLoading('Please wait...');
     const userId = this.auth.getAuthId();
     if (!userId) {
+      this.dismissLoading();
       this.showToast('User not logged in', 'danger');
       return;
     }
 
     this.auth.generateCustodialWallet({ userId, provider: 'solana' }).subscribe({
       next: (res) => {
+        this.dismissLoading();
         console.log('✅ Custodial wallet created:', res);
         this.showToast(`Wallet created: ${res.wallet.address}`, 'success');
       },
       error: (err) => {
+        this.dismissLoading();
         console.error('❌ Custodial wallet error:', err);
         this.showToast(err.error?.error || 'Custodial wallet error', 'danger');
       },

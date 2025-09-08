@@ -1,0 +1,110 @@
+<div id="wrapper">
+  <div id="page" class="pt-40 home-1">
+    <div class="wrapper-content mlr-15">
+      <div class="inner-content">
+        <div class="heading-section pt-40">
+          <h2 class="tf-title pb-30">Setting</h2>
+        </div>
+
+        <!-- Avatar -->
+        <div class="widget-edit mb-30 avatar">
+          <div class="title">
+            <h4>Edit your avatar</h4>
+            <i class="icon-keyboard_arrow_up"></i>
+          </div>
+          <form (ngSubmit)="saveAvatar()">
+            <div class="uploadfile flex">
+              <img [src]="avatar || 'assets/images/avatar/avatar-07.png'" alt="avatar" />
+              <div>
+                <h6>Upload a new avatar</h6>
+                <label>
+                  <input type="file" (change)="onAvatarChange($event)" name="file">
+                  <span class="text filename">No files selected</span>
+                </label>
+                <p class="text">JPEG 100x100</p>
+              </div>
+            </div>
+            <div class="btn-submit">
+              <button class="w242" type="submit">Save</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Profile -->
+        <div class="widget-edit mb-30 profile">
+          <div class="title">
+            <h4>Edit your profile</h4>
+            <i class="icon-keyboard_arrow_up"></i>
+          </div>
+          <form (ngSubmit)="updateProfile()" class="comment-form">
+            <div class="flex gap30">
+              <fieldset class="name">
+                <label>Your name*</label>
+                <input type="text" [(ngModel)]="name" name="name" placeholder="Enter your name" required>
+              </fieldset>
+              <fieldset class="email">
+                <label>Email address*</label>
+                <input type="email" [(ngModel)]="email" name="email" placeholder="Your email" required>
+              </fieldset>
+            </div>
+            <div class="btn-submit">
+              <button class="w242" type="submit">Save</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Password -->
+        <div class="widget-edit mb-30 password">
+          <div class="title">
+            <h4>Change password</h4>
+            <i class="icon-keyboard_arrow_up"></i>
+          </div>
+          <form (ngSubmit)="changePassword()" class="comment-form">
+            <fieldset class="password">
+              <label>Old password (Blank if no have password)</label>
+              <input type="password" [(ngModel)]="oldPassword" name="oldPassword" placeholder="Enter your old password" required>
+            </fieldset>
+            <fieldset class="password">
+              <label>New password</label>
+              <input type="password" [(ngModel)]="newPassword" name="newPassword" placeholder="Enter your new password" required>
+            </fieldset>
+            <fieldset class="password">
+              <label>Confirm password</label>
+              <input type="password" [(ngModel)]="confirmPassword" name="confirmPassword" placeholder="Confirm password" required>
+            </fieldset>
+            <div class="btn-submit">
+              <button class="w242" type="submit">Save</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Notifications -->
+        <div class="widget-edit mb-30 setting">
+          <div class="title">
+            <h4>Notification setting</h4>
+            <i class="icon-keyboard_arrow_up"></i>
+          </div>
+          <form (ngSubmit)="updateNotifications()" class="comment-form">
+            <div class="notification-setting-item">
+              <div class="content">
+                <h6>New Items Notification</h6>
+                <p>Mauris a velit commodo erat lobortis eleifend</p>
+              </div>
+              <input class="check" type="checkbox" [(ngModel)]="notifyNewItems" name="notifyNewItems">
+            </div>
+            <div class="notification-setting-item">
+              <div class="content">
+                <h6>Email notification</h6>
+                <p>Turn on email notification to get updates through email</p>
+              </div>
+              <input class="check" type="checkbox" [(ngModel)]="notifyEmail" name="notifyEmail">
+            </div>
+            <div class="btn-submit">
+              <button class="w242" type="submit">Save</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

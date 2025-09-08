@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">Universe Wallet</string>
     <string name="title_activity_main">Universe Wallet</string>
-    <string name="package_name">io.ionic.starter</string>
-    <string name="custom_url_scheme">io.ionic.starter</string>
+    <string name="package_name">com.universeofgamers.wallet</string>
+    <string name="custom_url_scheme">universeofgamers</string>
 </resources>

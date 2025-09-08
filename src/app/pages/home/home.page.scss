@@ -202,7 +202,7 @@ i.danger {
     }
 
     .btn-send {
-      background: #DDF247;
+      background: linear-gradient(45deg, #524afc 0%, #1ac4fc 100%);
       color: #161616;
       border: none;
       padding: 10px 20px;
@@ -373,6 +373,31 @@ i.danger {
 
 ::ng-deep .demoBorderRadius canvas {
   border-radius: 10px;
+}
+
+.selected-token {
+  background-color: #2d2d2d;
+  border-radius: 8px;
+}
+
+.quick-buttons {
+  margin-top: 8px;
+  display: flex;
+  gap: 10px;
+}
+
+.quick-buttons button {
+  flex: 1;
+  padding: 6px 0;
+  border: none;
+  border-radius: 6px;
+  background: #2d2d2d;
+  color: #fff;
+  cursor: pointer;
+}
+
+.quick-buttons button:hover {
+  background: #444;
 }
 
 @media (max-width: 991px) {

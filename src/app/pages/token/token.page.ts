@@ -1,9 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
-import { Connection, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { environment } from '../../../environments/environment';
-import { Transaction } from '@solana/web3.js';
 import { Idl } from '../../services/idl';
 
 import { WalletNftPage } from '../wallet-nft/wallet-nft.page';
@@ -496,30 +494,20 @@ export class TokenPage implements OnInit {
     if (!this.recipient || !this.amount) return;
 
     try {
-      // validasi address
-      new PublicKey(this.recipient);
-
-      // backend call: asumsi default SOL
+      // 1️⃣ Call backend untuk build tx
       const buildRes: any = await this.http.post(`${environment.apiUrl}/wallet/send/build`, {
         from: this.userAddress,
         to: this.recipient,
         amount: this.amount,
         mint: this.selectedTokenSymbol === 'SOL'
           ? 'So11111111111111111111111111111111111111112'
-          : null // atau ganti dengan mint token lain
+          : this.selectedToken?.mint
       }).toPromise();
 
-      const unsignedTx = Transaction.from(Buffer.from(buildRes.tx, "base64"));
-      const signedTx = await (window as any).solana.signTransaction(unsignedTx);
-
-      const submitRes: any = await this.http.post(`${environment.apiUrl}/wallet/send/submit`, {
-        signedTx: Buffer.from(signedTx.serialize()).toString("base64")
-      }).toPromise();
-
-      this.txSig = submitRes.signature;
+      // 2️⃣ Backend langsung broadcast → return signature
+      this.txSig = buildRes.signature;
       console.log("✅ Transaction sent:", this.txSig);
 
-      // ✅ Success toast
       const toast = await this.toastCtrl.create({
         message: `Transaction successful!`,
         duration: 2500,
@@ -533,7 +521,7 @@ export class TokenPage implements OnInit {
     } catch (err) {
       console.error(err);
       const toast = await this.toastCtrl.create({
-        message: `Failed to send ${this.selectedTokenSymbol === 'SOL'}`,
+        message: `Failed to send ${this.selectedTokenSymbol}`,
         duration: 2000,
         position: 'bottom',
         color: 'danger',
@@ -579,83 +567,85 @@ export class TokenPage implements OnInit {
   }
 
   async swapTokens(event: Event) {
-    event.preventDefault();
-    if (
-      !this.swapAmount ||
-      this.swapAmount <= 0 ||
-      this.swapAmount > this.selectedFromToken.amount
-    ) {
-      return;
-    }
-
-    try {
-      this.isSwapping = true;
-      this.txSig = null;
-
-      // 1️⃣ Call backend to get DFLOW quote
-      const quoteRes: any = await this.http
-        .post(`${environment.apiUrl}/wallet/swap/quote`, {
-          from: this.userAddress,
-          fromMint: this.selectedFromToken.mint,
-          toMint: this.selectedToToken.mint,
-          amount: this.swapAmount,
-        })
-        .toPromise();
-
-      console.log("✅ DFLOW Quote response:", quoteRes);
-
-      if (!quoteRes.openTransaction) {
-        throw new Error("❌ No openTransaction returned from backend");
-      }
-
-      // 2️⃣ Build tx for UOG marketplace program
-      const buildRes: any = await this.http
-        .post(`${environment.apiUrl}/wallet/swap/build`, {
-          from: this.userAddress,
-          openTransaction: quoteRes.openTransaction, // gunakan DFLOW openTransaction
-          fromMint: this.selectedFromToken.mint,
-          toMint: this.selectedToToken.mint,
-        })
-        .toPromise();
-
-      const unsignedTx = Transaction.from(Buffer.from(buildRes.tx, "base64"));
-
-      // 3️⃣ Sign with Phantom
-      const signedTx = await (window as any).solana.signTransaction(unsignedTx);
-
-      // 4️⃣ Submit to backend
-      const submitRes: any = await this.http
-        .post(`${environment.apiUrl}/wallet/swap/submit`, {
-          signedTx: Buffer.from(signedTx.serialize()).toString("base64"),
-        })
-        .toPromise();
-
-      this.txSig = submitRes.signature;
-
-      const toast = await this.toastCtrl.create({
-        message: `Swap successful! ✅`,
-        duration: 2500,
-        position: "bottom",
-        color: "success",
-        icon: "checkmark-circle-outline",
-        cssClass: "custom-toast",
-      });
-      await toast.present();
-    } catch (err) {
-      console.error("❌ swap error:", err);
-      const toast = await this.toastCtrl.create({
-        message: `Swap failed ❌`,
-        duration: 2000,
-        position: "bottom",
-        color: "danger",
-        icon: "close-circle-outline",
-        cssClass: "custom-toast",
-      });
-      await toast.present();
-    } finally {
-      this.isSwapping = false;
-    }
+  event.preventDefault();
+  if (
+    !this.swapAmount ||
+    this.swapAmount <= 0 ||
+    this.swapAmount > this.selectedFromToken.amount
+  ) {
+    return;
   }
+
+  try {
+    this.isSwapping = true;
+    this.txSig = null;
+
+    // 1️⃣ Quote dari backend (DFLOW / Jupiter / aggregator)
+    const quoteRes: any = await this.http
+      .post(`${environment.apiUrl}/wallet/swap/quote`, {
+        from: this.userAddress,
+        fromMint: this.selectedFromToken.mint,
+        toMint: this.selectedToToken.mint,
+        amount: this.swapAmount,
+      })
+      .toPromise();
+
+    console.log("✅ DFLOW Quote response:", quoteRes);
+
+    if (!quoteRes.openTransaction) {
+      throw new Error("❌ No openTransaction returned from backend");
+    }
+
+    // 2️⃣ Build tx di backend → return base64 string
+    const buildRes: any = await this.http
+      .post(`${environment.apiUrl}/wallet/swap/build`, {
+        from: this.userAddress,
+        openTransaction: quoteRes.openTransaction,
+        fromMint: this.selectedFromToken.mint,
+        toMint: this.selectedToToken.mint,
+      })
+      .toPromise();
+
+    if (!buildRes.tx) {
+      throw new Error("❌ No tx returned from backend build step");
+    }
+
+    // 3️⃣ Minta Phantom sign → langsung passing base64
+    const signed = await (window as any).solana.signTransaction(buildRes.tx);
+
+    // 4️⃣ Submit ke backend
+    const submitRes: any = await this.http
+      .post(`${environment.apiUrl}/wallet/swap/submit`, {
+        signedTx: signed, // langsung base64 dari Phantom
+      })
+      .toPromise();
+
+    this.txSig = submitRes.signature;
+
+    const toast = await this.toastCtrl.create({
+      message: `Swap successful! ✅`,
+      duration: 2500,
+      position: "bottom",
+      color: "success",
+      icon: "checkmark-circle-outline",
+      cssClass: "custom-toast",
+    });
+    await toast.present();
+  } catch (err) {
+    console.error("❌ swap error:", err);
+    const toast = await this.toastCtrl.create({
+      message: `Swap failed ❌`,
+      duration: 2000,
+      position: "bottom",
+      color: "danger",
+      icon: "close-circle-outline",
+      cssClass: "custom-toast",
+    });
+    await toast.present();
+  } finally {
+    this.isSwapping = false;
+  }
+}
 
   async toggleBuyModal() {
     const toast = await this.toastCtrl.create({

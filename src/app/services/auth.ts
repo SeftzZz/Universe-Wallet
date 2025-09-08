@@ -45,6 +45,7 @@ export class Auth {
   setToken(token: string, userId: string) {
     localStorage.setItem('token', token);
     localStorage.setItem('authId', userId);
+    localStorage.setItem('userId', userId);
   }
 
   getToken(): string | null {
@@ -56,11 +57,15 @@ export class Auth {
   }
 
   isLoggedIn(): boolean {
-    return !!localStorage.getItem('token');
+    const token = localStorage.getItem('token');
+    const loggedIn = !!token;
+    console.log('🔑 isLoggedIn() →', loggedIn, '| token =', token ? 'ada' : 'null');
+    return loggedIn;
   }
 
   logout() {
     localStorage.removeItem('token');
     localStorage.removeItem('authId');
+    localStorage.removeItem('userId');
   }
 }

@@ -8,25 +8,24 @@
                         <div id="site-header-inner"> 
                             <div class="wrap-box flex">
                                 <div id="site-logo">
-                                    <a (click)="connectWallet()" style="color: #161616;" *ngIf="!userAddress" class="tf-button style-1">
+                                    <a (click)="connectWallet()" style="color: #161616;" *ngIf="!activeWallet" class="tf-button style-1">
                                         <span>Wallet connect</span>
                                         <i class="icon-wa"></i>
                                     </a>
-                                    <div *ngIf="userAddress">
-                                      <img src="assets/images/app-logo.jpeg" style="height: 40px;border-radius: 10px;">
-                                      <span class="wallet-address">{{ shorten(userAddress) }}</span>
+                                    <div *ngIf="activeWallet">
+                                        <a [routerLink]="['/tabs/home']" (click)="closeMobileNav()" rel="home" class="main-logo">
+                                          <img id="mobile-logo_header"
+                                               src="assets/images/app-logo.jpeg"
+                                               data-retina="assets/images/app-logo.jpeg"
+                                               style="height: 40px;border-radius: 10px;">
+                                        </a>
+                                        <span class="wallet-address">{{ shorten(activeWallet) }}</span>
                                     </div>
                                 </div><!-- logo -->
-                                <div class="mobile-button">
+                                <div class="mobile-button" (click)="toggleMobileNav()">
                                     <span></span>
                                 </div><!-- /.mobile-button -->
                                 <div class="flat-wallet flex">
-                                    <!-- <div class="" id="wallet-header">
-                                        <a (click)="connectWallet()" id="connectbtn" class="tf-button style-1" style="color: #161616;">
-                                            <span>Wallet connect</span>
-                                            <i class="icon-wa"></i>
-                                        </a>
-                                    </div> -->
                                     <div class="header-search relative">
                                         <a href="#" class="show-search">
                                             <i class="icon-search"></i>
@@ -46,30 +45,51 @@
                     </div>
                 </div>
             </div>
-            <div class="mobile-nav-wrap">
-                <div class="overlay-mobile-nav"></div>
-                <div class="inner-mobile-nav">
-                    <a href="index.html" rel="home" class="main-logo">
-                        <img id="mobile-logo_header" src="assets/images/app-logo.jpeg" data-retina="assets/images/app-logo.jpeg" style="border-radius: 10px;">
-                    </a>
-                    <div class="mobile-nav-close">
-                        <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" fill="white" x="0px" y="0px" width="20px" height="20px" viewBox="0 0 122.878 122.88" enable-background="new 0 0 122.878 122.88" xml:space="preserve"><g><path d="M1.426,8.313c-1.901-1.901-1.901-4.984,0-6.886c1.901-1.902,4.984-1.902,6.886,0l53.127,53.127l53.127-53.127 c1.901-1.902,4.984-1.902,6.887,0c1.901,1.901,1.901,4.985,0,6.886L68.324,61.439l53.128,53.128c1.901,1.901,1.901,4.984,0,6.886 c-1.902,1.902-4.985,1.902-6.887,0L61.438,68.326L8.312,121.453c-1.901,1.902-4.984,1.902-6.886,0 c-1.901-1.901-1.901-4.984,0-6.886l53.127-53.128L1.426,8.313L1.426,8.313z"/></g></svg>
-                    </div>
-                    <nav id="mobile-main-nav" class="mobile-main-nav">
-                        <ul id="menu-mobile-menu" class="menu">
-                            <li class="menu-item current-item" *ngIf="userAddress">
-                                <a class="item-menu-mobile" [routerLink]="['/tabs/home']">{{ shorten(userAddress) }}</a>
-                            </li>
-                            <li class="menu-item">
-                                <a class="item-menu-mobile" [routerLink]="['/tabs/home']">Add Accounts</a>
-                            </li>
-                            <li class="menu-item">
-                                <a class="item-menu-mobile" [routerLink]="['/tabs/home']">Settings</a>
-                            </li>
-                        </ul>
-                    </nav>
+            <div class="mobile-nav-wrap" [class.active]="mobileNavActive">
+              <div class="overlay-mobile-nav" (click)="closeMobileNav()"></div>
+              <div class="inner-mobile-nav">
+                <a [routerLink]="['/tabs/home']" (click)="closeMobileNav()" rel="home" class="main-logo">
+                  <img id="mobile-logo_header"
+                       src="assets/images/app-logo.jpeg"
+                       data-retina="assets/images/app-logo.jpeg"
+                       style="border-radius: 10px;">
+                </a>
+
+                <!-- tombol close -->
+                <div class="mobile-nav-close" (click)="closeMobileNav()">
+                  <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" fill="white" x="0px" y="0px" width="20px" height="20px" viewBox="0 0 122.878 122.88" enable-background="new 0 0 122.878 122.88" xml:space="preserve"><g><path d="M1.426,8.313c-1.901-1.901-1.901-4.984,0-6.886c1.901-1.902,4.984-1.902,6.886,0l53.127,53.127l53.127-53.127 c1.901-1.902,4.984-1.902,6.887,0c1.901,1.901,1.901,4.985,0,6.886L68.324,61.439l53.128,53.128c1.901,1.901,1.901,4.984,0,6.886 c-1.902,1.902-4.985,1.902-6.887,0L61.438,68.326L8.312,121.453c-1.901,1.902-4.984,1.902-6.886,0 c-1.901-1.901-1.901-4.984,0-6.886l53.127-53.128L1.426,8.313L1.426,8.313z"/></g></svg>
                 </div>
+
+                <!-- menu -->
+                <nav id="mobile-main-nav" class="mobile-main-nav">
+                  <ul id="menu-mobile-menu" class="menu">
+                    <li class="menu-item" *ngFor="let w of uniqueWallets" 
+                        [ngClass]="{ 'current-item': w.address === activeWallet }">
+                      <a class="item-menu-mobile flex-between" 
+                         (click)="switchWallet(w.address); closeMobileNav()">
+                        <span>{{ shorten(w.address) }}</span>
+                        <span class="wallet-balance">
+                          ${{ w.usdValue | number:'1.2-2' }}
+                        </span>
+                      </a>
+                    </li>
+
+                    <li class="menu-item">
+                      <a class="item-menu-mobile" (click)="addCustodialAccount(); closeMobileNav()">
+                        Add Accounts
+                      </a>
+                    </li>
+
+                    <li class="menu-item">
+                      <a class="item-menu-mobile" [routerLink]="['/tabs/settings']" (click)="closeMobileNav()">
+                        Settings
+                      </a>
+                    </li>
+                  </ul>
+                </nav>
+              </div>
             </div>
+
         </header>
         
     </div>

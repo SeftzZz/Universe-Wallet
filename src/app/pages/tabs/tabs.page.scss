@@ -15,3 +15,18 @@
 #site-logo {
     align-content: center;
 }
+.item-menu-mobile.flex-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.wallet-balance {
+  font-size: 12px;
+  font-weight: 600;
+  color: #aaa;
+}
+
+.current-item .wallet-balance {
+    color: #3d74fc;
+}

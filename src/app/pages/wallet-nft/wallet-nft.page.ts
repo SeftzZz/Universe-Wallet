@@ -1,9 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
-import { Connection, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { environment } from '../../../environments/environment';
-import { Transaction } from '@solana/web3.js';
 import { Idl } from '../../services/idl';
 
 import { ModalController } from '@ionic/angular';

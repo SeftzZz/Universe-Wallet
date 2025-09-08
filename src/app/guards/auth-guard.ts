@@ -10,10 +10,14 @@ export class AuthGuard implements CanActivate {
   constructor(private auth: Auth, private router: Router) {}
 
   canActivate(): boolean | UrlTree {
-    if (this.auth.isLoggedIn()) {
+    const loggedIn = this.auth.isLoggedIn();
+    console.log('🛡️ canActivate() check →', loggedIn);
+
+    if (loggedIn) {
       return true; // ✅ user punya token → boleh masuk
     }
-    // ❌ belum login → redirect ke login
+
+    console.warn('❌ canActivate() → redirect ke /login');
     return this.router.parseUrl('/login');
   }
 }

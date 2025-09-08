@@ -66,6 +66,9 @@
                               <li class="item-title">
                                   <span class="inner">Collectibles</span>
                               </li>
+                              <li class="item-title">
+                                  <span class="inner">Trendings</span>
+                              </li>
                           </ul>
                           <div class="widget-content-tab pt-10">
                               <div class="widget-content-inner active">
@@ -77,7 +80,7 @@
                                                       <img src="{{ token.logoURI }}" alt="">
                                                   </div>
                                                   <div class="item-name">
-                                                      {{ shorten(token.symbol) }}
+                                                      {{ token.symbol }}
                                                       <h6 class="price gem pt-10" [countUp]="token.amount">
                                                           {{ token.amount }}
                                                       </h6>
@@ -120,6 +123,48 @@
                                       </div>
                                   </div>
                               </div>
+                              <div class="widget-content-inner">
+                                <div class="widget-table-ranking" *ngIf="trendingTokens.length > 0">
+                                  <div class="table-ranking-content" *ngFor="let token of trendingTokens">
+                                    <div
+                                      data-wow-delay="0s"
+                                      class="fl-row-ranking"
+                                      [routerLink]="['/tabs/token', token.mint]"
+                                    >
+                                      <div class="td1">
+                                        <div class="item-avatar">
+                                          <img [src]="token.logoURI || 'assets/images/box-icon/coin-01.png'" alt="" />
+                                        </div>
+                                        <div class="item-name">
+                                          {{ shorten(token.symbol) }}
+                                          <h6 class="price gem pt-10">
+                                            ${{ token.priceUsd | number:'1.6-6' }}
+                                          </h6>
+                                        </div>
+                                      </div>
+                                      <div class="td5">
+                                        <h6 class="price gem">
+                                          ${{ token.marketCap | shortNumber }}
+                                          <div class="td4 warning pt-10">
+                                            <span
+                                              [ngClass]="token.trend > 0 ? 'warning' : (token.trend < 0 ? 'danger' : '')"
+                                            >
+                                              {{ token.trend > 0 ? '+' : ''}}{{ token.percentChange | number:'1.2-2' }}%
+                                            </span>
+                                            <i
+                                              [ngClass]="
+                                                token.trend > 0
+                                                  ? 'icon-arrow-up2 warning'
+                                                  : (token.trend < 0 ? 'icon-arrow-down2 danger' : '')
+                                              "
+                                            ></i>
+                                          </div>
+                                        </h6>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
                           </div>
                       </div>
                   </div>
@@ -159,12 +204,12 @@
       <div class="sheet-backdrop" (click)="toggleReceiveSheet()"></div>
       <div class="sheet-container" [ngClass]="{ 'slide-up': !isClosing, 'slide-down': isClosing }">
         <h3>Receive Address</h3>
-        <p>{{ userAddress }}</p>
+        <p>{{ activeWallet ? activeWallet : '' }}</p>
 
         <!-- ✅ QR Code -->
         <div class="qrcodeImage">
           <qrcode 
-            [qrdata]="userAddress"
+            [qrdata]="activeWallet ? activeWallet : ''"
             [allowEmptyString]="true"
             [ariaLabel]="'QR Code image with the following content...'"
             [cssClass]="'demoBorderRadius'"
@@ -177,7 +222,7 @@
             [imageWidth]="75"
             [margin]="4"
             [scale]="1"
-            [title]="userAddress"
+            [title]="activeWallet ? activeWallet : ''"
             [width]="300">
           </qrcode>
         </div>
@@ -355,16 +400,12 @@
 
           <!-- List token pakai template ranking -->
           <div class="widget-table-ranking pb-20" *ngIf="tokens.length > 0">
-            <div
-              class="table-ranking-content"
-              *ngFor="let token of tokens | filter:swapSearchFrom"
-              (click)="selectFromToken(token)"
-            >
+            <div class="table-ranking-content" *ngFor="let token of tokens | filter:swapSearchFrom" (click)="selectFromToken(token)">
               <div data-wow-delay="0s" class="fl-row-ranking">
                 <!-- Kolom kiri: logo + symbol + balance -->
                 <div class="td1">
                   <div class="item-avatar">
-                    <img [src]="token.logoURI || 'assets/images/default-token.png'" alt="{{ token.symbol }}">
+                    <img [src]="token.logoURI || 'assets/images/box-icon/coin-01.png'" alt="{{ token.symbol }}">
                   </div>
                   <div class="item-name">
                     {{ token.symbol }}
@@ -413,16 +454,45 @@
             </button>
           </form>
 
-          <div class="token-list">
-            <div class="token-item" *ngFor="let token of tokens | filter:swapSearchTo"
-                 (click)="selectToToken(token)">
-              <img [src]="token.logoURI || 'assets/images/default-token.png'" alt="{{token.symbol}}" class="token-logo">
-              <div class="token-info">
-                <strong>{{ token.symbol }}</strong>
-                <small>{{ token.amount }}</small>
+          <!-- List token pakai template ranking -->
+          <div class="widget-table-ranking pb-20" *ngIf="tokens.length > 0">
+            <div class="table-ranking-content" *ngFor="let token of tokens | filter:swapSearchTo" (click)="selectToToken(token)">
+              <div data-wow-delay="0s" class="fl-row-ranking" *ngIf="!selectedFromToken || token.mint !== selectedFromToken.mint">
+                <!-- Kolom kiri: logo + symbol + balance -->
+                <div class="td1">
+                  <div class="item-avatar">
+                    <img [src]="token.logoURI || 'assets/images/box-icon/coin-01.png'" alt="{{ token.symbol }}">
+                  </div>
+                  <div class="item-name">
+                    {{ token.symbol }}
+                    <h6 class="price gem pt-10">{{ token.amount }}</h6>
+                  </div>
+                </div>
+
+                <!-- Kolom kanan: nilai USD + trend -->
+                <div class="td5">
+                  <h6 class="price gem">
+                    ${{ token.usdValue || 0 }}
+                    <div class="td4 warning pt-10">
+                      <span
+                        [ngClass]="token.trend > 0 ? 'warning' : (token.trend < 0 ? 'danger' : '')"
+                      >
+                        {{ token.trend > 0 ? '+' : ''}}{{ token.percentChange | number:'1.2-2' }}%
+                      </span>
+                      <i
+                        [ngClass]="
+                          token.trend > 0
+                            ? 'icon-arrow-up2 warning'
+                            : (token.trend < 0 ? 'icon-arrow-down2 danger' : '')
+                        "
+                      ></i>
+                    </div>
+                  </h6>
+                </div>
               </div>
             </div>
           </div>
+
           <div class="modal-actions">
             <button class="btn-cancel" (click)="selectedFromToken = null">Back</button>
           </div>
@@ -436,15 +506,31 @@
           <form (submit)="swapTokens($event)">
             <div class="form-group">
               <label for="swapAmount">Amount ({{ selectedFromToken.symbol }})</label>
-              <input type="number" id="swapAmount" [(ngModel)]="swapAmount"
-                     name="swapAmount" required min="0"
-                     class="search-field style-1">
-              <small>{{ selectedFromToken.amount }}</small>
+              <input
+                type="number"
+                id="swapAmount"
+                [(ngModel)]="swapAmount"
+                name="swapAmount"
+                required
+                min="0"
+                class="search-field style-1"
+              >
+              <p>Balance: {{ selectedFromToken.amount }}</p>
+
+              <!-- Tombol cepat -->
+              <div class="quick-buttons">
+                <button type="button" (click)="setHalfAmount()">50%</button>
+                <button type="button" (click)="setMaxAmount()">Max</button>
+              </div>
             </div>
+
             <div class="modal-actions">
               <button type="button" class="btn-cancel" (click)="selectedToToken = null">Back</button>
-              <button type="submit" class="btn-send"
-                      [disabled]="!swapAmount || swapAmount <= 0 || swapAmount > selectedFromToken.amount">
+              <button
+                type="submit"
+                class="btn-send"
+                [disabled]="!swapAmount || swapAmount <= 0 || swapAmount > selectedFromToken.amount"
+              >
                 Swap
               </button>
             </div>

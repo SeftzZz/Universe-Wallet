@@ -1,92 +1,22 @@
 import { Component, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
-import { Connection, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { environment } from '../../../environments/environment';
-import { Transaction } from '@solana/web3.js';
 import { Idl } from '../../services/idl';
+import { Wallet } from '../../services/wallet';
+const web3 = require('@solana/web3.js');
 
 import { WalletNftPage } from '../wallet-nft/wallet-nft.page';
 import { Router } from '@angular/router';
 
 import { ActionSheetController } from '@ionic/angular';
-import { ToastController } from '@ionic/angular';
+import { ToastController, LoadingController } from '@ionic/angular';
 import {
   trigger,
   transition,
   style,
   animate
 } from '@angular/animations';
-
-import {
-  ChartConfiguration,
-  ChartType,
-} from 'chart.js';
-
-import { Chart } from 'chart.js';
-
-const crosshairPlugin = {
-    id: 'crosshair',
-    afterDraw: (chart: Chart) => {
-      // pastikan tooltip aktif dan punya element
-      const tooltip = chart.tooltip;
-      if (!tooltip) return;
-      const activeElements = tooltip.getActiveElements();
-      if (!activeElements || activeElements.length === 0) return;
-
-      const ctx = chart.ctx;
-      const activePoint = activeElements[0];
-      const { x, y } = activePoint.element;
-
-      // akses scales dengan bracket agar TypeScript aman
-      const yAxis = chart.scales['y'];
-      const xAxis = chart.scales['x'];
-
-      if (!yAxis || !xAxis) return;
-
-      ctx.save();
-      ctx.setLineDash([5, 5]);
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = '#999';
-
-      // Vertical line
-      ctx.beginPath();
-      ctx.moveTo(x, yAxis.top);
-      ctx.lineTo(x, yAxis.bottom);
-      ctx.stroke();
-
-      // Horizontal line
-      ctx.beginPath();
-      ctx.moveTo(xAxis.left, y);
-      ctx.lineTo(xAxis.right, y);
-      ctx.stroke();
-
-      // Dot at intersection
-      ctx.beginPath();
-      ctx.arc(x, y, 4, 0, 2 * Math.PI);
-      ctx.fillStyle = 'red';
-      ctx.fill();
-
-      ctx.restore();
-    }
-};
-
-Chart.register(crosshairPlugin);
-
-interface Candle {
-  open: number;
-  close: number;
-  high: number;
-  low: number;
-  volume: number;
-  time: number;
-}
-
-interface SolResponse {
-  candles: Candle[];
-  athToday: number;
-  athGlobal: number;
-}
 
 @Component({
   selector: 'app-home',
@@ -120,6 +50,7 @@ export class HomePage implements OnInit {
 
   tokens: any[] = [];
   nfts: any[] = [];
+  trendingTokens: any[] = [];
 
   showReceiveSheet = false;
   isClosing = false;
@@ -142,34 +73,65 @@ export class HomePage implements OnInit {
   isSwapping = false;
   swapSearchFrom: string = '';
   swapSearchTo: string = '';
+
+  private loading: HTMLIonLoadingElement | null = null;
+
+  activeWallet: string = '';
   
   constructor(
     private http: HttpClient, 
     private idlService: Idl, 
     private router: Router, 
     private actionSheetCtrl: ActionSheetController,
-    private toastCtrl: ToastController
-  ) {}
+    private toastCtrl: ToastController,
+    private loadingCtrl: LoadingController,
+    private walletService: Wallet,
+  ) {
+    this.dismissLoading();
+  }
 
- async ngOnInit() {
-    const saved = localStorage.getItem('walletAddress');
-    if (saved) {
-      this.userAddress = saved;
+  async ngOnInit() {
+    // 🔹 subscribe perubahan activeWallet
+    this.walletService.getActiveWallet().subscribe(async (addr) => {
+      if (addr) {
+        this.activeWallet = addr;
+        console.log('🔄 Active wallet updated in Home:', addr);
 
-      // 1️⃣ cek tokens di localStorage dulu
-      const cachedTokens = localStorage.getItem('walletTokens');
-      if (cachedTokens) {
-        try {
-          this.tokens = JSON.parse(cachedTokens);
-        } catch (e) {
-          console.error("❌ Error parse cached tokens", e);
-        }
+        // refresh data setiap kali wallet diganti
+        await this.updateBalance();
+        await this.loadTokens();
+        await this.loadNfts();
+        await this.loadTrendingTokens();
       }
+    });
+  }
 
-      // 2️⃣ tetap panggil server untuk update balance & tokens
-      await this.updateBalance();
-      await this.loadTokens();
-      await this.loadNfts();
+  private async setActiveWallet(address: string) {
+    this.userAddress = address;
+
+    // 1️⃣ cek tokens di localStorage dulu
+    const cachedTokens = localStorage.getItem('walletTokens');
+    if (cachedTokens) {
+      try {
+        this.tokens = JSON.parse(cachedTokens);
+      } catch (e) {
+        console.error("❌ Error parse cached tokens", e);
+      }
+    }
+
+    // 2️⃣ tetap panggil server untuk update balance & tokens
+    await this.updateBalance();
+    await this.loadTokens();
+    await this.loadNfts();
+    await this.loadTrendingTokens();
+  }
+
+  ionViewWillEnter() {
+    if (this.activeWallet) {
+      this.updateBalance();
+      this.loadTokens();
+      this.loadNfts();
+      this.loadTrendingTokens();
     }
   }
 
@@ -200,10 +162,10 @@ export class HomePage implements OnInit {
   }
 
   async updateBalance() {
-    if (!this.userAddress) return;
+    if (!this.activeWallet) return;
     try {
       const resp: any = await this.http
-        .get(`${environment.apiUrl}/wallet/balance/${this.userAddress}`)
+        .get(`${environment.apiUrl}/wallet/balance/${this.activeWallet}`)
         .toPromise();
 
       this.balance = resp.solBalance;
@@ -213,25 +175,23 @@ export class HomePage implements OnInit {
 
     } catch (err) {
       console.error('Error fetch balance from API', err);
+      this.router.navigateByUrl('/tabs/offline');
     }
   }
 
   async loadTokens() {
-    if (!this.userAddress) return;
+    if (!this.activeWallet) return;
     try {
       const resp: any = await this.http
-        .get(`${environment.apiUrl}/wallet/tokens/${this.userAddress}`)
+        .get(`${environment.apiUrl}/wallet/tokens/${this.activeWallet}`)
         .toPromise();
 
       this.tokens = resp.tokens || [];
-
-      // 3️⃣ simpan ke localStorage untuk cache
       localStorage.setItem('walletTokens', JSON.stringify(this.tokens));
-
     } catch (err) {
       console.error('Error fetch tokens from API', err);
+      this.router.navigateByUrl('/tabs/offline');
 
-      // kalau API error, fallback ke cache
       const cachedTokens = localStorage.getItem('walletTokens');
       if (cachedTokens) {
         try {
@@ -245,25 +205,45 @@ export class HomePage implements OnInit {
   }
 
   async loadNfts() {
-    if (!this.userAddress) return;
+    if (!this.activeWallet) return;
     try {
       const resp: any = await this.http
-        .get(`${environment.apiUrl}/wallet/nfts/${this.userAddress}`)
+        .get(`${environment.apiUrl}/wallet/nfts/${this.activeWallet}`)
         .toPromise();
 
       this.nfts = resp || [];
-
     } catch (err) {
       console.error('Error fetch NFTs from API', err);
+      this.router.navigateByUrl('/tabs/offline');
+    }
+  }
+
+  async loadTrendingTokens() {
+    try {
+      const resp: any = await this.http
+        .get(`${environment.apiUrl}/wallet/trending`)
+        .toPromise();
+
+      this.trendingTokens = resp.tokens || [];
+      console.log('🔥 Trending tokens loaded:', this.trendingTokens.length);
+    } catch (err) {
+      console.error('❌ Error fetch trending tokens', err);
     }
   }
 
   shorten(addr: string) {
-    return addr.slice(0, 7);
+    return addr.slice(0, 6) + '...' + addr.slice(-4);
+  }
+
+  async dismissLoading() {
+    if (this.loading) {
+      await this.loading.dismiss();
+      this.loading = null;
+    }
   }
 
   async walletNft() {
-    this.router.navigate(['/tabs/wallet-nft']);
+    this.router.navigate(['/tabs/home']);
   }
 
   async toggleReceiveSheet() {
@@ -314,16 +294,7 @@ export class HomePage implements OnInit {
   }
 
   toggleSendModal() {
-    if (this.showSendModal) {
-      // tutup pakai animasi slide-down
-      this.isClosingSend = true;
-      setTimeout(() => {
-        this.showSendModal = false;
-        this.isClosingSend = false;
-      }, 300);
-    } else {
-      this.showSendModal = true;
-    }
+    this.showSendModal = true;
   }
 
   get filteredTokens() {
@@ -353,23 +324,6 @@ export class HomePage implements OnInit {
     const token = this.selectedToken;
 
     try {
-      // ✅ Validasi recipient address
-      try {
-        new PublicKey(this.recipient);
-      } catch (e) {
-        const toast = await this.toastCtrl.create({
-          message: 'Invalid Solana address',
-          duration: 2000,
-          position: 'bottom',
-          color: 'danger',
-          icon: 'close-circle-outline',
-          cssClass: 'custom-toast'
-        });
-        await toast.present();
-        return;
-      }
-
-      // ✅ Validasi balance
       if (this.amount > token.amount) {
         const toast = await this.toastCtrl.create({
           message: `Insufficient balance. Your ${token.symbol} balance is ${token.amount}`,
@@ -383,12 +337,9 @@ export class HomePage implements OnInit {
         return;
       }
 
-      // 👉 Step 3: show loading
       this.isSending = true;
       this.txSig = null;
-      console.log(`🚀 Sending ${this.amount} ${this.selectedToken.symbol} to ${this.recipient}`);
 
-      // 1️⃣ Minta unsigned tx dari backend
       const buildRes: any = await this.http.post(`${environment.apiUrl}/wallet/send/build`, {
         from: this.userAddress,
         to: this.recipient,
@@ -396,21 +347,22 @@ export class HomePage implements OnInit {
         mint: token.mint
       }).toPromise();
 
-      const unsignedTx = Transaction.from(Buffer.from(buildRes.tx, "base64"));
+      if (!buildRes.tx) throw new Error("❌ No tx returned from backend");
 
-      // 2️⃣ Sign di Phantom
-      const signedTx = await (window as any).solana.signTransaction(unsignedTx);
+      const tx = web3.Transaction.from(Buffer.from(buildRes.tx, "base64"));
 
-      // 3️⃣ Kirim signed tx ke backend untuk broadcast
+      const signedTx = await (window as any).solana.signTransaction(tx);
+
+      const signedTxBase64 = signedTx.serialize().toString("base64");
+
       const submitRes: any = await this.http.post(`${environment.apiUrl}/wallet/send/submit`, {
-        signedTx: Buffer.from(signedTx.serialize()).toString("base64")
+        signedTx: signedTxBase64
       }).toPromise();
 
-      this.txSig = submitRes.signature; // tx signature dari backend
+      this.txSig = submitRes.signature;
 
-      // ✅ Success toast
       const toast = await this.toastCtrl.create({
-        message: `Transaction successful!`,
+        message: `Transaction successful! ✅`,
         duration: 2500,
         position: 'bottom',
         color: 'success',
@@ -420,7 +372,7 @@ export class HomePage implements OnInit {
       await toast.present();
 
     } catch (err) {
-      console.error(err);
+      console.error("❌ sendToken error:", err);
       const toast = await this.toastCtrl.create({
         message: `Failed to send ${token.symbol}`,
         duration: 2000,
@@ -461,10 +413,24 @@ export class HomePage implements OnInit {
 
   selectFromToken(token: any) {
     this.selectedFromToken = token;
+    this.swapAmount = 0;
   }
 
   selectToToken(token: any) {
     this.selectedToToken = token;
+    this.swapAmount = 0;
+  }
+
+  setHalfAmount() {
+    if (this.selectedFromToken) {
+      this.swapAmount = this.selectedFromToken.amount / 2;
+    }
+  }
+
+  setMaxAmount() {
+    if (this.selectedFromToken) {
+      this.swapAmount = this.selectedFromToken.amount;
+    }
   }
 
   async swapTokens(event: Event) {
@@ -481,43 +447,38 @@ export class HomePage implements OnInit {
       this.isSwapping = true;
       this.txSig = null;
 
-      // 1️⃣ Call backend to get DFLOW quote
-      const quoteRes: any = await this.http
-        .post(`${environment.apiUrl}/wallet/swap/quote`, {
-          from: this.userAddress,
-          fromMint: this.selectedFromToken.mint,
-          toMint: this.selectedToToken.mint,
-          amount: this.swapAmount,
-        })
-        .toPromise();
+      // 1️⃣ Quote
+      const quoteRes: any = await this.http.post(`${environment.apiUrl}/wallet/swap/quote`, {
+        from: this.userAddress,
+        fromMint: this.selectedFromToken.mint,
+        toMint: this.selectedToToken.mint,
+        amount: this.swapAmount,
+        decimals: this.selectedToToken.decimals,
+      }).toPromise();
 
-      console.log("✅ DFLOW Quote response:", quoteRes);
+      if (!quoteRes.openTransaction) throw new Error("❌ No openTransaction from backend");
 
-      if (!quoteRes.openTransaction) {
-        throw new Error("❌ No openTransaction returned from backend");
-      }
+      // 2️⃣ Build tx
+      const buildRes: any = await this.http.post(`${environment.apiUrl}/wallet/swap/build`, {
+        from: this.userAddress,
+        openTransaction: quoteRes.openTransaction,
+        fromMint: this.selectedFromToken.mint,
+        toMint: this.selectedToToken.mint,
+      }).toPromise();
 
-      // 2️⃣ Build tx for UOG marketplace program
-      const buildRes: any = await this.http
-        .post(`${environment.apiUrl}/wallet/swap/build`, {
-          from: this.userAddress,
-          openTransaction: quoteRes.openTransaction, // gunakan DFLOW openTransaction
-          fromMint: this.selectedFromToken.mint,
-          toMint: this.selectedToToken.mint,
-        })
-        .toPromise();
+      if (!buildRes.tx) throw new Error("❌ No tx from backend build step");
 
-      const unsignedTx = Transaction.from(Buffer.from(buildRes.tx, "base64"));
+      // 3️⃣ Phantom sign → pakai base64 langsung
+      const tx = web3.Transaction.from(Buffer.from(buildRes.tx, "base64"));
 
-      // 3️⃣ Sign with Phantom
-      const signedTx = await (window as any).solana.signTransaction(unsignedTx);
+      const signedTx = await (window as any).solana.signTransaction(tx);
 
-      // 4️⃣ Submit to backend
-      const submitRes: any = await this.http
-        .post(`${environment.apiUrl}/wallet/swap/submit`, {
-          signedTx: Buffer.from(signedTx.serialize()).toString("base64"),
-        })
-        .toPromise();
+      const signedTxBase64 = signedTx.serialize().toString("base64");
+
+      // 4️⃣ Submit
+      const submitRes: any = await this.http.post(`${environment.apiUrl}/wallet/swap/submit`, {
+        signedTx: signedTxBase64,
+      }).toPromise();
 
       this.txSig = submitRes.signature;
 
@@ -530,6 +491,7 @@ export class HomePage implements OnInit {
         cssClass: "custom-toast",
       });
       await toast.present();
+
     } catch (err) {
       console.error("❌ swap error:", err);
       const toast = await this.toastCtrl.create({
