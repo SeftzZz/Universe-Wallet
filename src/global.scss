@@ -93,6 +93,11 @@ ease 0.3s;
     color: #3d74fc;
 }
 
+/* global.scss atau theme/variables.scss */
+ion-toast::part(message) {
+  font-size: 12px;
+}
+
 :root {
     --ion-color-primary: linear-gradient(90deg, #524afc 0%, #1ac4fc 100%);
     --ion-color-primary-rgb: 0, 84, 233;

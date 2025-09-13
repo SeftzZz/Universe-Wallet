@@ -13,12 +13,12 @@
                 <div class="row">
                     <div class="col-12 pages-title">
                         <div class="content">
-                            <h1 *ngIf="balance !== null">
-                              <span [countUp]="balance" suffix=" SOL" [duration]="2000"></span>
+                            <h1 *ngIf="totalBalanceSol !== null">
+                              <span [countUp]="totalBalanceSol" suffix=" SOL" [duration]="2000"></span>
                             </h1>
 
-                            <h4 class="pb-10" *ngIf="balanceUsd !== null" id="balanceUsdValue">
-                              <span [countUp]="balanceUsd" prefix="$" [duration]="2000"></span>
+                            <h4 class="pb-10" *ngIf="totalBalanceUsd !== null" id="balanceUsdValue">
+                              <span [countUp]="totalBalanceUsd" prefix="$" [duration]="2000"></span>
                               <span [ngClass]="trend > 0 ? 'warning' : (trend < 0 ? 'danger' : '')">
                                 {{ trend > 0 ? '+' : ''}}{{ percentChange | number:'1.2-2' }}%
                               </span>

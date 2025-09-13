@@ -400,6 +400,10 @@ i.danger {
   background: #444;
 }
 
+.pt-20 {
+  padding-top: 20px;  
+}
+
 @media (max-width: 991px) {
     .widget-table-ranking .table-ranking-heading, .widget-table-ranking .table-ranking-content {
         width: auto;

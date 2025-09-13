@@ -27,7 +27,13 @@ export class Auth {
   }
 
   // === Login / Import External Wallet ===
-  loginWithWallet(data: { provider: string; address: string; name?: string }): Observable<any> {
+  loginWithWallet(data: { 
+    provider: string; 
+    address: string; 
+    name?: string; 
+    signature: string; 
+    nonce: string; 
+  }): Observable<any> {
     return this.http.post(`${environment.apiUrl}/auth/wallet`, data);
   }
 

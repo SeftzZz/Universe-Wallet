@@ -9,6 +9,10 @@ import bs58 from 'bs58';
 import { ToastController, LoadingController } from '@ionic/angular';
 import { Phantom } from './services/phantom';
 import { StatusBar, Style } from '@capacitor/status-bar';
+import { HttpClient } from '@angular/common/http';
+import { environment } from '../environments/environment';
+import { User, UserProfile } from './services/user';
+import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 
 declare var bootstrap: any;
 declare function btnmenu(): void;
@@ -31,9 +35,11 @@ export class AppComponent implements AfterViewInit {
     private auth: Auth,
     private toastCtrl: ToastController,
     private loadingCtrl: LoadingController,
-    private phantom: Phantom
+    private phantom: Phantom,
+    private http: HttpClient, 
+    private userService: User,
   ) {
-    App.addListener('appUrlOpen', (data: any) => {
+    App.addListener('appUrlOpen', async (data: any) => {
       console.log('📥 Phantom callback raw URL:', data.url);
 
       const url = new URL(data.url);
@@ -97,11 +103,43 @@ export class AppComponent implements AfterViewInit {
         if (payload.public_key) {
           // login ke backend
           // this.presentLoading('Logging in...');
+
+          // === Desktop (extension Phantom) ===
+          console.log('🖥️ Desktop flow detected.');
+          const provider = (window as any).solana;
+          if (!provider || !provider.isPhantom) {
+            console.warn('❌ Phantom extension not found in browser.');
+            this.showToast('Phantom wallet not available', 'danger');
+            return;
+          }
+
           this.userAddress = payload.public_key;
+          console.log('⏳ Requesting login challenge from backend...');
+
+          // 1️⃣ Ambil challenge dari backend
+          const challenge: any = await this.http
+            .get(`${environment.apiUrl}/auth/wallet/challenge?address=${this.userAddress}`)
+            .toPromise();
+
+          console.log('📜 Challenge received:', challenge);
+
+          // 2️⃣ Sign challenge message pakai Phantom
+          const messageBytes = new TextEncoder().encode(challenge.message);
+          const signed = await provider.signMessage(messageBytes, "utf8");
+          const signature = signed.signature ? bs58.encode(signed.signature) : null;
+
+          if (!signature) {
+            this.showToast('❌ Signature missing', 'danger');
+            return;
+          }
+
+          // 3️⃣ Kirim hasil sign ke backend
           this.auth.loginWithWallet({
             provider: 'phantom',
             address: this.userAddress,
             name: 'Phantom User',
+            signature,
+            nonce: challenge.nonce,
           }).subscribe({
             next: (res) => {
               this.dismissLoading();
@@ -109,11 +147,9 @@ export class AppComponent implements AfterViewInit {
 
               this.auth.setToken(res.token, res.authId);
 
-              localStorage.setItem('walletAddress', payload.public_key);
-              localStorage.setItem('phantomSession', payload.session);
               localStorage.setItem('userId', res.authId);
+              localStorage.setItem('walletAddress', this.userAddress);
 
-              // setelah dapat response dari backend
               if (res.wallets || res.custodialWallets) {
                 const allWallets = [
                   ...(res.wallets),
@@ -123,7 +159,7 @@ export class AppComponent implements AfterViewInit {
               }
 
               this.showToast('Wallet connected ✅', 'success');
-              this.router.navigate(['/tabs/home']);
+              window.location.href = '/tabs/home';
             },
             error: (err) => {
               this.dismissLoading();
@@ -144,6 +180,29 @@ export class AppComponent implements AfterViewInit {
     });
 
     this.initStatusBar();
+
+    const userId = localStorage.getItem('userId');
+    if (userId) {
+      this.http.get(`${environment.apiUrl}/auth/user/${userId}`).subscribe((res: any) => {
+        const avatarUrl = res.avatar
+          ? `${environment.baseUrl}${res.avatar}`
+          : 'assets/images/app-logo.jpeg';
+
+        this.userService.setUser({
+          name: res.name,
+          email: res.email,
+          notifyNewItems: res.notifyNewItems || false,
+          notifyEmail: res.notifyEmail || false,
+          avatar: avatarUrl,
+        });
+      });
+    }
+
+    // Hanya untuk Web (PWA) supaya tidak nabrak gapi.auth2
+    GoogleAuth.initialize({
+      clientId: '542126096811-asmbfaoqgk3itq0amjjn85q4qvabl3aa.apps.googleusercontent.com',
+      scopes: ['profile', 'email'],
+    });
   }
 
   async initStatusBar() {

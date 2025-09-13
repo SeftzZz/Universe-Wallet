@@ -4,6 +4,9 @@ import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
 import { Idl } from '../../services/idl';
 import { Wallet } from '../../services/wallet';
+import { Auth } from '../../services/auth';
+import { Modal } from '../../services/modal';
+import { User, UserProfile } from '../../services/user';
 const web3 = require('@solana/web3.js');
 
 import { WalletNftPage } from '../wallet-nft/wallet-nft.page';
@@ -42,6 +45,8 @@ export class HomePage implements OnInit {
   userAddress: string = '';
   balance: number | null = null;
   balanceUsd: number | null = null;
+  totalBalanceUsd: number | null = null;
+  totalBalanceSol: number | null = null;
   uploadForm!: FormGroup;
   blockchainSelected: string | null = null;
   private lastBalanceUsd: number | null = null;
@@ -77,6 +82,18 @@ export class HomePage implements OnInit {
   private loading: HTMLIonLoadingElement | null = null;
 
   activeWallet: string = '';
+
+  wallets: any[] = [];
+
+  name: string = '';
+  email: string = '';
+  oldPassword: string = '';
+  newPassword: string = '';
+  confirmPassword: string = '';
+  notifyNewItems: boolean = false;
+  notifyEmail: boolean = false;
+  avatarFile: File | null = null;
+  avatar: string = '';
   
   constructor(
     private http: HttpClient, 
@@ -85,7 +102,10 @@ export class HomePage implements OnInit {
     private actionSheetCtrl: ActionSheetController,
     private toastCtrl: ToastController,
     private loadingCtrl: LoadingController,
+    private auth: Auth,
     private walletService: Wallet,
+    private modalService: Modal,
+    private userService: User,
   ) {
     this.dismissLoading();
   }
@@ -104,6 +124,33 @@ export class HomePage implements OnInit {
         await this.loadTrendingTokens();
       }
     });
+
+    // subscribe ke UserService agar avatar langsung update
+    this.userService.getUser().subscribe(profile => {
+      this.name = profile.name;
+      this.email = profile.email;
+      this.notifyNewItems = profile.notifyNewItems;
+      this.notifyEmail = profile.notifyEmail;
+      this.avatar = profile.avatar;
+    });
+
+    const userId = localStorage.getItem('userId');
+    if (userId) {
+      this.http.get(`${environment.apiUrl}/auth/user/${userId}`).subscribe((res: any) => {
+        const avatarUrl = res.avatar
+          ? `${environment.baseUrl}${res.avatar}`
+          : 'assets/images/app-logo.jpeg';
+
+        // update service → otomatis update avatar di semua halaman
+        this.userService.setUser({
+          name: res.name,
+          email: res.email,
+          notifyNewItems: res.notifyNewItems || false,
+          notifyEmail: res.notifyEmail || false,
+          avatar: avatarUrl,
+        });
+      });
+    }
   }
 
   private async setActiveWallet(address: string) {
@@ -187,6 +234,8 @@ export class HomePage implements OnInit {
         .toPromise();
 
       this.tokens = resp.tokens || [];
+      this.totalBalanceUsd = resp.total;
+      this.totalBalanceSol = resp.totalSol;
       localStorage.setItem('walletTokens', JSON.stringify(this.tokens));
     } catch (err) {
       console.error('Error fetch tokens from API', err);
@@ -261,10 +310,10 @@ export class HomePage implements OnInit {
   }
 
   async copyAddress() {
-    if (!this.userAddress) return;
+    if (!this.activeWallet) return;
     try {
-      await navigator.clipboard.writeText(this.userAddress);
-      console.log('✅ Copied:', this.userAddress);
+      await navigator.clipboard.writeText(this.activeWallet);
+      console.log('✅ Copied:', this.activeWallet);
 
       // tutup sheet dengan animasi slide-down
       this.toggleReceiveSheet();
@@ -341,7 +390,7 @@ export class HomePage implements OnInit {
       this.txSig = null;
 
       const buildRes: any = await this.http.post(`${environment.apiUrl}/wallet/send/build`, {
-        from: this.userAddress,
+        from: this.activeWallet,
         to: this.recipient,
         amount: this.amount,
         mint: token.mint
@@ -361,6 +410,9 @@ export class HomePage implements OnInit {
 
       this.txSig = submitRes.signature;
 
+      await this.updateBalance();
+      await this.loadTokens();
+
       const toast = await this.toastCtrl.create({
         message: `Transaction successful! ✅`,
         duration: 2500,
@@ -372,6 +424,9 @@ export class HomePage implements OnInit {
       await toast.present();
 
     } catch (err) {
+      await this.updateBalance();
+      await this.loadTokens();
+
       console.error("❌ sendToken error:", err);
       const toast = await this.toastCtrl.create({
         message: `Failed to send ${token.symbol}`,
@@ -447,23 +502,31 @@ export class HomePage implements OnInit {
       this.isSwapping = true;
       this.txSig = null;
 
-      // 1️⃣ Quote
+      const WSOL_MINT = "So11111111111111111111111111111111111111112";
+      const DUMMY_SOL_MINT = "So11111111111111111111111111111111111111111";
+
+      function normalizeMint(mint: string): string {
+        return mint === DUMMY_SOL_MINT ? WSOL_MINT : mint;
+      }
+
+      /// 1️⃣ Quote
       const quoteRes: any = await this.http.post(`${environment.apiUrl}/wallet/swap/quote`, {
-        from: this.userAddress,
-        fromMint: this.selectedFromToken.mint,
-        toMint: this.selectedToToken.mint,
+        from: this.activeWallet,
+        fromMint: normalizeMint(this.selectedFromToken.mint),
+        toMint: normalizeMint(this.selectedToToken.mint),
         amount: this.swapAmount,
-        decimals: this.selectedToToken.decimals,
       }).toPromise();
 
       if (!quoteRes.openTransaction) throw new Error("❌ No openTransaction from backend");
 
-      // 2️⃣ Build tx
+      // 2️⃣ Build tx - ADD MISSING PARAMETERS
       const buildRes: any = await this.http.post(`${environment.apiUrl}/wallet/swap/build`, {
-        from: this.userAddress,
+        from: this.activeWallet,
         openTransaction: quoteRes.openTransaction,
-        fromMint: this.selectedFromToken.mint,
-        toMint: this.selectedToToken.mint,
+        toMint: normalizeMint(this.selectedToToken.mint),
+        fromMint: normalizeMint(this.selectedFromToken.mint), // ADD THIS
+        inAmount: quoteRes.inAmount, // ADD THIS
+        outAmount: quoteRes.outAmount,
       }).toPromise();
 
       if (!buildRes.tx) throw new Error("❌ No tx from backend build step");
@@ -482,6 +545,9 @@ export class HomePage implements OnInit {
 
       this.txSig = submitRes.signature;
 
+      await this.updateBalance();
+      await this.loadTokens();
+
       const toast = await this.toastCtrl.create({
         message: `Swap successful! ✅`,
         duration: 2500,
@@ -493,9 +559,12 @@ export class HomePage implements OnInit {
       await toast.present();
 
     } catch (err) {
+      await this.updateBalance();
+      await this.loadTokens();
+
       console.error("❌ swap error:", err);
       const toast = await this.toastCtrl.create({
-        message: `Swap failed ❌`,
+        message: `Swap failed ❌ ${err}`,
         duration: 2000,
         position: "bottom",
         color: "danger",

@@ -46,7 +46,7 @@
 
               <div class="other">or continue</div>
               <div class="login-other">
-                <a href="#" class="login-other-item" (click)="googleLogin()">
+                <a class="login-other-item" (click)="googleLogin()">
                   <img src="assets/images/google.png" alt="" />
                   <span>Log in with Google</span>
                 </a>
@@ -60,6 +60,12 @@
                     Disconnect Wallet
                   </button>
                 </div>
+                <a class="login-other-item" (click)="toggleAccountsModal();">
+                  <div class="item-avatar">
+                    <ion-icon name="download-outline"></ion-icon>
+                  </div>
+                  <span *ngIf="!userAddress">Import Wallet</span>
+                </a>
               </div>
 
               <div class="no-account">
@@ -69,6 +75,95 @@
             </div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- 🔄 Modal Accounts -->
+    <div class="custom-modal" *ngIf="showAccountsModal">
+      <div class="modal-backdrop" (click)="resetAccountsModal()"></div>
+
+      <div class="modal-sheet" [ngClass]="{ 'slide-up': !isClosingAccounts, 'slide-down': isClosingAccounts }">
+
+        <!-- Step 1: Pilihan utama -->
+        <div *ngIf="!selectedAccountAction">
+          <h2 class="modal-title">Add Account</h2>
+
+          <div class="widget-table-ranking pb-20">            
+
+            <!-- Import Recovery Phrase -->
+            <div class="table-ranking-content" (click)="selectAccountAction('phrase')">
+              <div class="fl-row-ranking">
+                <div class="td1">
+                  <div class="item-avatar">
+                    <ion-icon name="document-text-outline"></ion-icon>
+                  </div>
+                  <div class="item-name">
+                    Import Recovery Phrase
+                    <p class="price gem pt-10">Import from seed phrase</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Import Private Key -->
+            <div class="table-ranking-content" (click)="selectAccountAction('private')">
+              <div class="fl-row-ranking">
+                <div class="td1">
+                  <div class="item-avatar">
+                    <ion-icon name="key-outline"></ion-icon>
+                  </div>
+                  <div class="item-name">
+                    Import Private Key
+                    <p class="price gem pt-10">Import a single-chain account</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" class="btn-cancel" (click)="resetAccountsModal()">Cancel</button>
+          </div>
+        </div>
+
+        <!-- Step 2a: Import Phrase -->
+        <div *ngIf="selectedAccountAction === 'phrase'">
+          <h2 class="modal-title">Import Recovery Phrase</h2>
+          <form (submit)="importRecoveryPhrase($event)">
+            <textarea
+              [(ngModel)]="recoveryPhrase"
+              name="recoveryPhrase"
+              placeholder="Enter your 12/24-word phrase"
+              class="search-field style-1"
+              rows="3"
+              required>
+            </textarea>
+            <div class="modal-actions pt-20">
+              <button class="btn-cancel" (click)="selectedAccountAction = null">Back</button>
+              <button type="submit" class="btn-send">Import</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Step 2b: Import Private Key -->
+        <div *ngIf="selectedAccountAction === 'private'">
+          <h2 class="modal-title">Import Private Key</h2>
+          <form (submit)="importPrivateKey($event)">
+            <input
+              type="text"
+              [(ngModel)]="privateKey"
+              name="privateKey"
+              placeholder="Enter your private key"
+              class="search-field style-1"
+              required>
+            <div class="modal-actions pt-20">
+              <button class="btn-cancel" (click)="selectedAccountAction = null">Back</button>
+              <button type="submit" class="btn-send">Import</button>
+            </div>
+          </form>
+        </div>
+
       </div>
     </div>
   </div>

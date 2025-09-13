@@ -4,10 +4,10 @@
 
 export const environment = {
   production: false,
-  apiUrl: 'https://api.universeofgamers.io/api',
-  baseUrl: 'https://api.universeofgamers.io',
+  apiUrl: 'http://localhost:3000/api',
+  baseUrl: 'http://localhost:3000',
   rpcUrl: 'https://mainnet.helius-rpc.com/?api-key=99344f8f-e269-4d69-b838-675fad917aa0',
-  programId: 'uogFWAerSHCq5WkEEmm9WDCm1LBTSK913fWcW8iiLqb'
+  programId: 'uogMfvGwEWuX8rv6BunmwU5v9abVKcP9vjwvt4cK1Sq'
 };
 
 /*

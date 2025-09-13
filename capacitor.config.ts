@@ -14,7 +14,12 @@ const config: CapacitorConfig = {
     },
     StatusBar: {
       overlaysWebView: false
-    }
+    },
+    GoogleAuth: {
+      scopes: ['profile', 'email'],
+      serverClientId: '542126096811-asmbfaoqgk3itq0amjjn85q4qvabl3aa.apps.googleusercontent.com',
+      forceCodeForRefreshToken: true,
+    },
   }
 };
 

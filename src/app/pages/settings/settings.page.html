@@ -14,14 +14,18 @@
           </div>
           <form (ngSubmit)="saveAvatar()">
             <div class="uploadfile flex">
-              <img [src]="avatar || 'assets/images/avatar/avatar-07.png'" alt="avatar" />
+              <img [src]="avatar || 'assets/images/app-logo.jpeg'" alt="avatar" />
               <div>
-                <h6>Upload a new avatar</h6>
+                <h6>Upload a new avatar (ratio 1:1)</h6>
                 <label>
-                  <input type="file" (change)="onAvatarChange($event)" name="file">
-                  <span class="text filename">No files selected</span>
+                  <input 
+                    type="file" 
+                    id="avatarInput"
+                    #avatarInput
+                    (change)="onAvatarChange($event)"
+                  />
+                  <span class="text filename">{{ fileName }}</span>
                 </label>
-                <p class="text">JPEG 100x100</p>
               </div>
             </div>
             <div class="btn-submit">
@@ -101,6 +105,47 @@
             </div>
             <div class="btn-submit">
               <button class="w242" type="submit">Save</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Secret Key & Phaseprase -->
+        <div class="widget-edit mb-30 setting">
+          <div class="title">
+            <h4>Account Secret</h4>
+            <i class="icon-keyboard_arrow_up"></i>
+          </div>
+          <form (ngSubmit)="updateNotifications()" class="comment-form">
+            <div class="notification-setting-item">
+              <div class="content">
+                <h6>Show Recovery Phrase</h6>
+                <p *ngIf="recoveryPhrase" (click)="copyToClipboard(recoveryPhrase)">
+                  {{ recoveryPhrase }}
+                </p>
+              </div>
+              <input
+                class="check"
+                type="checkbox"
+                [(ngModel)]="showRecoveryPhraseToggle"
+                name="showRecoveryPhraseToggle"
+                (change)="showSecretPrompt('recovery')"
+              >
+            </div>
+
+            <div class="notification-setting-item">
+              <div class="content">
+                <h6>Show Private Key</h6>
+                <p *ngIf="privateKey" (click)="copyToClipboard(privateKey)">
+                  {{ privateKey }}
+                </p>
+              </div>
+              <input
+                class="check"
+                type="checkbox"
+                [(ngModel)]="showPrivateKeyToggle"
+                name="showPrivateKeyToggle"
+                (change)="showSecretPrompt('privateKey')"
+              >
             </div>
           </form>
         </div>
