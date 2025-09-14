@@ -23,20 +23,25 @@
                     required
                   />
                 </fieldset>
+
                 <fieldset class="password">
                   <label>Password *</label>
                   <input
-                    type="password"
-                    name="password"
-                    [(ngModel)]="password"
-                    placeholder="Min. 8 character"
-                    required
+                      [type]="showPassword ? 'text' : 'password'"
+                      name="password"
+                      [(ngModel)]="password"
+                      placeholder="Min. 8 character"
+                      required
                   />
-                  <i class="icon-show password-addon" id="password-addon"></i>
+                  <i
+                    class="{{ showPassword ? 'icon-hide' : 'icon-show' }} password-addon"
+                    (click)="togglePassword()"
+                  ></i>
                   <div class="forget-password">
                     <a href="#">Forget password</a>
                   </div>
                 </fieldset>
+
                 <div class="btn-submit mb-30">
                   <button class="tf-button style-1 h50 w-100" type="submit">
                     Login <i class="icon-arrow-up-right2"></i>

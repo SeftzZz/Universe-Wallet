@@ -41,28 +41,34 @@
                             <label>Password *</label>
                             <input
                               class="password-input"
-                              type="password"
+                              [type]="showPassword ? 'text' : 'password'"
                               id="password"
                               placeholder="Min. 8 characters"
                               name="password"
                               [(ngModel)]="password"
                               required
                             />
-                            <i class="icon-show password-addon" id="password-addon"></i>
+                            <i
+                              class="{{ showPassword ? 'icon-hide' : 'icon-show' }} password-addon"
+                              (click)="togglePassword('password')"
+                            ></i>
                           </fieldset>
 
                           <fieldset class="password">
                             <label>Confirm password *</label>
                             <input
                               class="password-input"
-                              type="password"
+                              [type]="showPasswordConfirm ? 'text' : 'password'"
                               id="confirmPassword"
                               placeholder="Confirm password"
                               name="confirmPassword"
                               [(ngModel)]="confirmPassword"
                               required
                             />
-                            <i class="icon-show password-addon" id="password-addon"></i>
+                            <i
+                              class="{{ showPasswordConfirm ? 'icon-hide' : 'icon-show' }} password-addon"
+                              (click)="togglePassword('confirm')"
+                            ></i>
 
                             <div class="widget-category-checkbox">
                               <label>
@@ -79,17 +85,6 @@
                             </button>
                           </div>
                         </form>
-                        <div class="other">or continue</div>
-                        <div class="login-other">
-                            <a href="#" class="login-other-item">
-                                <img src="assets/images/google.png" alt="">
-                                <span>Sign up with google</span>
-                            </a>
-                            <a href="#" class="login-other-item">
-                                <img src="assets/images/box-icon/wallet-05.png" alt="" style="height: 25px;">
-                                <span>Sign up with phantom</span>
-                            </a>
-                        </div>
                         <div class="no-account">Already have an account?  <a [routerLink]="['/login']" class="tf-color">Log in</a></div>
                     </div>
                 </div>

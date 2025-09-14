@@ -29,6 +29,7 @@ export class LoginPage implements OnInit {
   email = '';
   password = '';
   userAddress: string = '';
+  showPassword: boolean = false;
 
   balance: number | null = null;
   balanceUsd: number | null = null;
@@ -245,6 +246,10 @@ export class LoginPage implements OnInit {
   clearForm() {
     this.email = '';
     this.password = '';
+  }
+
+  togglePassword() {
+    this.showPassword = !this.showPassword;
   }
 
   // === Login dengan email + password ===

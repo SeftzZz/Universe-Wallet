@@ -15,6 +15,8 @@ export class RegistrationPage implements OnInit {
   password = '';
   confirmPassword = '';
   acceptedTerms = false;
+  showPassword: boolean = false;
+  showPasswordConfirm: boolean = false;
 
   private loading: HTMLIonLoadingElement | null = null;
 
@@ -59,6 +61,14 @@ export class RegistrationPage implements OnInit {
     this.password = '';
     this.confirmPassword = '';
     this.acceptedTerms = false;
+  }
+
+  togglePassword(field: 'password' | 'confirm') {
+    if (field === 'password') {
+      this.showPassword = !this.showPassword;
+    } else {
+      this.showPasswordConfirm = !this.showPasswordConfirm;
+    }
   }
 
   onRegister(event: Event) {

@@ -32,6 +32,11 @@ export class SettingsPage implements OnInit {
   showPrivateKeyToggle = false;
   showRecoveryPhraseToggle = false;
 
+  qrImage: string = '';
+  otpCode: string = '';
+  secretCode: string = '';
+  twoFactorEnabled: boolean = false;
+
   constructor(
     private http: HttpClient, 
     private toastCtrl: ToastController,
@@ -358,4 +363,61 @@ export class SettingsPage implements OnInit {
     }
   }
 
+  async toggle2FA(event: any) {
+    if (event.target.checked) {
+      await this.setup2FA();
+    } else {
+      this.showToast('⚠️ Disable 2FA not implemented yet');
+      this.twoFactorEnabled = true; // reset supaya tidak langsung uncheck
+    }
+  }
+
+  async setup2FA() {
+    const userId = localStorage.getItem('userId');
+    const token = localStorage.getItem('token');
+    if (!userId || !token) {
+      this.showToast('❌ User not logged in');
+      return;
+    }
+
+    try {
+      const res: any = await this.http.post(
+        `${environment.apiUrl}/auth/user/${userId}/2fa/setup`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      ).toPromise();
+
+      this.qrImage = res.qr;
+      this.secretCode = res.secret; 
+      this.showToast('📲 Scan QR dengan Google Authenticator');
+    } catch (err: any) {
+      console.error('❌ Setup 2FA gagal:', err);
+      this.showToast(err.error?.error || '❌ Setup 2FA gagal');
+    }
+  }
+
+  async onSubmit2FA() {
+    const userId = localStorage.getItem('userId');
+    const token = localStorage.getItem('token');
+    if (!userId || !token) {
+      this.showToast('❌ User not logged in');
+      return;
+    }
+
+    try {
+      const res: any = await this.http.post(
+        `${environment.apiUrl}/auth/user/${userId}/2fa/verify`,
+        { otpCode: this.otpCode },
+        { headers: { Authorization: `Bearer ${token}` } }
+      ).toPromise();
+
+      this.twoFactorEnabled = true;
+      this.qrImage = '';
+      this.otpCode = '';
+      this.showToast('✅ 2FA berhasil diaktifkan');
+    } catch (err: any) {
+      console.error('❌ Verifikasi 2FA gagal:', err);
+      this.showToast(err.error?.error || '❌ Verifikasi 2FA gagal');
+    }
+  }
 }

@@ -149,6 +149,63 @@
             </div>
           </form>
         </div>
+
+        <!-- Two-Factor Authentication -->
+        <div class="widget-edit mb-30 setting">
+          <div class="title">
+            <h4>Two-Factor Authentication</h4>
+            <i class="icon-keyboard_arrow_up"></i>
+          </div>
+          <form class="comment-form" (ngSubmit)="onSubmit2FA()">
+            <div class="notification-setting-item">
+              <div class="content">
+                <h6>Enable 2FA</h6>
+                <p>Protect your account using Google Authenticator</p>
+              </div>
+              <input
+                class="check"
+                type="checkbox"
+                [(ngModel)]="twoFactorEnabled"
+                name="twoFactorEnabled"
+                (change)="toggle2FA($event)"
+              >
+            </div>
+
+            <!-- Tampilkan QR Code jika setup -->
+            <div class="notification-setting-item" *ngIf="qrImage">
+              <div class="content">
+                <h6>Scan QR Code</h6>
+                <p>Scan with Google Authenticator</p>
+                <img [src]="qrImage" alt="2FA QR Code" style="max-width:200px; margin:1rem auto;">
+
+                <h6>Or Enter This Key Manually</h6>
+                <p (click)="copyToClipboard(secretCode)">
+                  {{ secretCode }}
+                </p>
+              </div>
+            </div>
+
+            <!-- Input OTP untuk verifikasi -->
+            <div class="notification-setting-item" *ngIf="qrImage">
+              <div class="content">
+                <h6>Enter OTP</h6>
+                <p>Enter code 6 digit from Google Authenticator</p>
+                <input
+                  type="text"
+                  [(ngModel)]="otpCode"
+                  name="otpCode"
+                  placeholder="123456"
+                  class="form-control"
+                />
+              </div>
+            </div>
+
+            <div class="btn-submit" *ngIf="qrImage">
+              <button class="w242" type="submit">Verify & Enable</button>
+            </div>
+          </form>
+        </div>
+
       </div>
     </div>
   </div>
