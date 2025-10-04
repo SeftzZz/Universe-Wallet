@@ -242,7 +242,7 @@ export class SettingsPage implements OnInit {
   async showSecretPrompt(type: 'privateKey' | 'recovery') {
     const alert = await this.alertCtrl.create({
       header: 'Confirm Access',
-      message: 'Enter your password and 6-digit OTP code to reveal secret',
+      message: 'Enter password, 6-digit OTP, and a passphrase to protect your secret',
       inputs: [
         {
           name: 'password',
@@ -254,35 +254,27 @@ export class SettingsPage implements OnInit {
           type: 'text',
           placeholder: '6-digit OTP',
           attributes: { inputmode: 'numeric', maxlength: 6 }
+        },
+        {
+          name: 'passphrase',
+          type: 'password',
+          placeholder: 'Custom passphrase (only you know)',
         }
       ],
       buttons: [
-        {
-          text: 'Cancel',
-          role: 'cancel',
-          handler: () => {
-            if (type === 'privateKey') {
-              this.showPrivateKeyToggle = false;
-            } else {
-              this.showRecoveryPhraseToggle = false;
-            }
-            return true;
-          },
-        },
+        { text: 'Cancel', role: 'cancel' },
         {
           text: 'Confirm',
           handler: async (data) => {
-            if (!data.password || !data.otpCode) {
-              this.showToast('❌ Password and OTP are required');
+            if (!data.password || !data.otpCode || !data.passphrase) {
+              this.showToast('❌ Password, OTP, and passphrase are required');
               return false;
             }
 
             if (type === 'privateKey') {
-              await this.fetchPrivateKey(data.password, data.otpCode);
-              this.showPrivateKeyToggle = false;
+              await this.fetchPrivateKey(data.password, data.otpCode, data.passphrase);
             } else {
-              await this.fetchRecoveryPhrase(data.password, data.otpCode);
-              this.showRecoveryPhraseToggle = false;
+              await this.fetchRecoveryPhrase(data.password, data.otpCode, data.passphrase);
             }
             return true;
           },
@@ -293,7 +285,7 @@ export class SettingsPage implements OnInit {
     await alert.present();
   }
 
-  async fetchPrivateKey(password: string, otpCode: string) {
+  async fetchPrivateKey(password: string, otpCode: string, passphrase: string) {
     const userId = localStorage.getItem('userId');
     const token = localStorage.getItem('token');
     const walletAddress = localStorage.getItem('walletAddress');
@@ -306,24 +298,29 @@ export class SettingsPage implements OnInit {
     try {
       const res: any = await this.http.post(
         `${environment.apiUrl}/auth/user/${userId}/export/private`,
-        { address: walletAddress, password, otpCode }, // ✅ kirim OTP juga
+        { address: walletAddress, password, otpCode, passphrase },
         { headers: { Authorization: `Bearer ${token}` } }
       ).toPromise();
 
-      this.privateKey = res.privateKey;
-      this.showToast('✅ Private key revealed');
+      // ✅ terima encryptedKey, bukan raw privateKey
+      const encryptedKey = res.encryptedKey;
+
+      // decrypt di FE pakai passphrase
+      this.privateKey = await this.decryptWithPassphrase(res.encryptedKey, passphrase);
+      this.showToast('✅ Private key decrypted locally');
 
       setTimeout(() => {
         this.privateKey = '';
         this.showToast('🔒 Private key auto-hidden');
       }, 30000);
+
     } catch (err: any) {
       console.error('❌ Failed to fetch private key:', err);
       this.showToast(err.error?.error || '❌ Failed to fetch private key');
     }
   }
 
-  async fetchRecoveryPhrase(password: string, otpCode: string) {
+  async fetchRecoveryPhrase(password: string, otpCode: string, passphrase: string) {
     const userId = localStorage.getItem('userId');
     const token = localStorage.getItem('token');
     const walletAddress = localStorage.getItem('walletAddress');
@@ -336,12 +333,13 @@ export class SettingsPage implements OnInit {
     try {
       const res: any = await this.http.post(
         `${environment.apiUrl}/auth/user/${userId}/export/phrase`,
-        { address: walletAddress, password, otpCode }, // ✅ kirim OTP juga
+        { address: walletAddress, password, otpCode, passphrase }, // ✅ kirim passphrase juga
         { headers: { Authorization: `Bearer ${token}` } }
       ).toPromise();
 
-      this.recoveryPhrase = res.recoveryPhrase;
-      this.showToast('✅ Recovery phrase revealed');
+      // ✅ decrypt lokal sama kayak privateKey
+      this.recoveryPhrase = await this.decryptWithPassphrase(res.recoveryPhrase, passphrase);
+      this.showToast('✅ Recovery phrase decrypted locally');
 
       setTimeout(() => {
         this.recoveryPhrase = '';
@@ -351,6 +349,60 @@ export class SettingsPage implements OnInit {
       console.error('❌ Failed to fetch recovery phrase:', err);
       this.showToast(err.error?.error || '❌ Failed to fetch recovery phrase');
     }
+  }
+
+  // helper untuk convert base64 → ArrayBuffer
+  base64ToArrayBuffer(base64: string): ArrayBuffer {
+    const binary = atob(base64);
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes.buffer;
+  }
+
+  // helper untuk convert ArrayBuffer → string utf8
+  arrayBufferToString(buffer: ArrayBuffer): string {
+    return new TextDecoder().decode(buffer);
+  }
+
+  // ✅ Decrypt pakai Web Crypto API
+  async decryptWithPassphrase(encryptedBase64: string, passphrase: string): Promise<string> {
+    const raw = this.base64ToArrayBuffer(encryptedBase64);
+    const data = new Uint8Array(raw);
+
+    // sesuai backend: [iv(16)][tag(16)][ciphertext]
+    const iv = data.slice(0, 16);
+    const tag = data.slice(16, 32);
+    const ciphertext = data.slice(32);
+
+    // gabungkan ciphertext + tag → sesuai format WebCrypto
+    const cipherAndTag = new Uint8Array(ciphertext.length + tag.length);
+    cipherAndTag.set(ciphertext, 0);
+    cipherAndTag.set(tag, ciphertext.length);
+
+    // derive key dari passphrase (sha256)
+    const passphraseKey = await window.crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(passphrase)
+    );
+
+    const key = await window.crypto.subtle.importKey(
+      "raw",
+      passphraseKey,
+      { name: "AES-GCM" },
+      false,
+      ["decrypt"]
+    );
+
+    const decrypted = await window.crypto.subtle.decrypt(
+      { name: "AES-GCM", iv },
+      key,
+      cipherAndTag
+    );
+
+    return new TextDecoder().decode(decrypted);
   }
 
   async copyToClipboard(text: string) {

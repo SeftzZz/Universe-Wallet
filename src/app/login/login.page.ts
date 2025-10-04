@@ -55,6 +55,9 @@ export class LoginPage implements OnInit {
 
   private loading: HTMLIonLoadingElement | null = null;
 
+  private phantomFlow: 'connect' | 'signMessage' | null = null;
+  private challengeNonce: string | null = null;
+
   constructor(
     private http: HttpClient,
     private auth: Auth,
@@ -88,30 +91,28 @@ export class LoginPage implements OnInit {
       const dappPubKey = this.phantom.getPublicKeyB58();
       const nonceB58 = this.phantom.getNonceB58();
 
-      // ⚠️ redirect harus sama dengan di AndroidManifest (scheme)
       const redirect = 'universeofgamers://phantom-callback';
       const appUrl = 'https://universeofgamers.io';
 
-      // 📌 Buat schemaUrl manual sesuai format Phantom
       const schemaUrl =
         `https://phantom.app/ul/v1/connect?` +
         `dapp_encryption_public_key=${dappPubKey}` +
         `&cluster=mainnet-beta` +
-        `&app_url=${encodeURIComponent(appUrl)}` +   // ✅ encode app_url
-        `&redirect_link=${redirect}` +               // ✅ jangan encode custom scheme
+        `&app_url=${encodeURIComponent(appUrl)}` +
+        `&redirect_link=${redirect}` +
         `&nonce=${nonceB58}`;
 
       console.log("🔗 schemaUrl:", schemaUrl);
 
       if (Capacitor.getPlatform() === 'android' || Capacitor.getPlatform() === 'ios') {
-        setTimeout(async () => {
-          try {
-            window.location.href = schemaUrl;
-            console.log('🌐 Universal link opened successfully.');
-          } catch (err) {
-            console.error('❌ Failed to open universal link:', err);
-          }
-        }, 1000);
+        // 🔑 Simpan flag bahwa ini flow connect
+        localStorage.setItem("phantomFlow", "connect");
+
+        setTimeout(() => {
+          window.location.href = schemaUrl;
+          console.log('🌐 Universal link opened (mobile connect).');
+        }, 500);
+
       } else {
         // === Desktop (extension Phantom) ===
         console.log('🖥️ Desktop flow detected.');
@@ -130,14 +131,12 @@ export class LoginPage implements OnInit {
         if (this.userAddress) {
           console.log('⏳ Requesting login challenge from backend...');
 
-          // 1️⃣ Ambil challenge dari backend
           const challenge: any = await this.http
             .get(`${environment.apiUrl}/auth/wallet/challenge?address=${this.userAddress}`)
             .toPromise();
 
           console.log('📜 Challenge received:', challenge);
 
-          // 2️⃣ Sign challenge message pakai Phantom
           const messageBytes = new TextEncoder().encode(challenge.message);
           const signed = await provider.signMessage(messageBytes, "utf8");
           const signature = signed.signature ? bs58.encode(signed.signature) : null;
@@ -147,7 +146,6 @@ export class LoginPage implements OnInit {
             return;
           }
 
-          // 3️⃣ Kirim hasil sign ke backend
           this.auth.loginWithWallet({
             provider: 'phantom',
             address: this.userAddress,
@@ -160,7 +158,6 @@ export class LoginPage implements OnInit {
               console.log('✅ Wallet login success, backend response:', res);
 
               this.auth.setToken(res.token, res.authId);
-
               localStorage.setItem('userId', res.authId);
               localStorage.setItem('walletAddress', this.userAddress);
 

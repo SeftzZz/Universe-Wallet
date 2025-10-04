@@ -21,6 +21,21 @@ import {
   animate
 } from '@angular/animations';
 
+import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
+import { of, Subject, firstValueFrom } from 'rxjs';
+import { NgZone } from '@angular/core';
+
+interface SignResponse {
+  signedTx?: string;   // optional, bisa kosong saat status pending
+  txId?: string;       // ID transaksi di DB
+  status?: "pending" | "signed" | "failed";
+  message?: string;    // optional, dari backend
+}
+
+interface SubmitResponse {
+  signature: string;
+}
+
 @Component({
   selector: 'app-home',
   templateUrl: './home.page.html',
@@ -94,7 +109,25 @@ export class HomePage implements OnInit {
   notifyEmail: boolean = false;
   avatarFile: File | null = null;
   avatar: string = '';
-  
+
+  showSignModal = false;
+  isClosingSign = false;
+  signCompleted = false;
+  signRejected = false;
+  isSigning = false;
+  pendingBuildTx: any = null;       // Menyimpan hasil /wallet/send/build sementara
+  signedTxBase64: string | null = null;  // Menyimpan hasil tanda tangan base64
+  pendingTxId: string | null = null;
+
+  showOptionsModal = false;
+  isClosingOptions = false;
+  tokenSearchOptions = '';
+  filteredOptionTokens: any[] = [];
+  searchResults: any[] = [];
+  isSearching = false;
+  selectedOptionToken: any = null;
+  searchInput$ = new Subject<string>();
+
   constructor(
     private http: HttpClient, 
     private idlService: Idl, 
@@ -106,8 +139,30 @@ export class HomePage implements OnInit {
     private walletService: Wallet,
     private modalService: Modal,
     private userService: User,
+    private zone: NgZone,
   ) {
     this.dismissLoading();
+
+    // ✅ Debounce input untuk pencarian jaringan
+    this.searchInput$
+      .pipe(
+        debounceTime(400),
+        distinctUntilChanged(),
+        switchMap((query) => this.searchTokenNetwork(query))
+      )
+      .subscribe({
+        next: (results) => {
+          // pastikan update view dilakukan di dalam zone
+          this.zone.run(() => {
+            this.searchResults = results;
+            this.isSearching = false;
+          });
+        },
+        error: (err) => {
+          console.error('❌ Search token error', err);
+          this.isSearching = false;
+        },
+      });
   }
 
   async ngOnInit() {
@@ -389,30 +444,86 @@ export class HomePage implements OnInit {
       this.isSending = true;
       this.txSig = null;
 
-      const buildRes: any = await this.http.post(`${environment.apiUrl}/wallet/send/build`, {
-        from: this.activeWallet,
-        to: this.recipient,
-        amount: this.amount,
-        mint: token.mint
-      }).toPromise();
+      // 🧱 1️⃣ Build unsigned transaction
+      const buildRes: any = await this.http.post(
+        `${environment.apiUrl}/wallet/send/build`,
+        {
+          from: this.activeWallet,
+          to: this.recipient,
+          amount: this.amount,
+          mint: token.mint
+        }
+      ).toPromise();
 
-      if (!buildRes.tx) throw new Error("❌ No tx returned from backend");
+      if (!buildRes?.tx) throw new Error("❌ No tx returned from backend");
+      this.pendingBuildTx = buildRes;
 
-      const tx = web3.Transaction.from(Buffer.from(buildRes.tx, "base64"));
+      // 🪪 2️⃣ Request to save TX as pending (server creates txId)
+      const signRes: any = await this.http.post(
+        `${environment.apiUrl}/wallet/send/sign`,
+        { tx: buildRes.tx, wallet: this.activeWallet }
+      ).toPromise();
 
-      const signedTx = await (window as any).solana.signTransaction(tx);
+      console.log("📩 Sign response:", signRes);
 
-      const signedTxBase64 = signedTx.serialize().toString("base64");
+      if (!signRes?.txId) throw new Error("❌ Missing txId from sign response");
+      this.pendingTxId = signRes.txId;
+      console.log("💾 Saved pendingTxId:", this.pendingTxId);
 
-      const submitRes: any = await this.http.post(`${environment.apiUrl}/wallet/send/submit`, {
-        signedTx: signedTxBase64
-      }).toPromise();
+      // ✨ 3️⃣ Buka modal tanda tangan setelah txId tersimpan
+      this.toggleSignModal();
+      this.signCompleted = false;
+      this.signRejected = false;
 
+      // 4️⃣ Kalau status pending → tunggu manual sign
+      if (signRes?.status === "pending") {
+        console.log("⏳ Waiting for manual signature...");
+
+        let signedTx: string | null = null;
+        for (let i = 0; i < 30; i++) {
+          await new Promise(r => setTimeout(r, 2000));
+
+          const statusRes: any = await this.http
+            .get(`${environment.apiUrl}/wallet/send/status/${this.pendingTxId}`)
+            .toPromise();
+
+          console.log(`... still waiting signature ${i}`);
+
+          if (statusRes?.status === "signed" && statusRes?.signedTx) {
+            console.log("✅ Signature found!");
+            signedTx = statusRes.signedTx;
+            this.signCompleted = true;
+            break;
+          }
+        }
+
+        if (!signedTx) throw new Error("Timeout waiting for signature");
+        this.signedTxBase64 = signedTx;
+      } 
+      else if (signRes?.signedTx) {
+        // langsung signed
+        this.signCompleted = true;
+        this.signedTxBase64 = signRes.signedTx;
+      } 
+      else {
+        throw new Error("❌ Signing failed");
+      }
+
+      // 🔄 5️⃣ Submit signed transaction ke backend
+      const submitRes = await this.http.post<SubmitResponse>(
+        `${environment.apiUrl}/wallet/send/submit`,
+        { signedTx: this.signedTxBase64 }
+      ).toPromise();
+
+      if (!submitRes?.signature) throw new Error("❌ No signature from submit response");
       this.txSig = submitRes.signature;
 
+      // 🔃 6️⃣ Refresh balance & token list
       await this.updateBalance();
       await this.loadTokens();
+      this.closeSignModal();
 
+      // ✅ 7️⃣ Notifikasi sukses
       const toast = await this.toastCtrl.create({
         message: `Transaction successful! ✅`,
         duration: 2500,
@@ -423,14 +534,11 @@ export class HomePage implements OnInit {
       });
       await toast.present();
 
-    } catch (err) {
-      await this.updateBalance();
-      await this.loadTokens();
-
+    } catch (err: any) {
       console.error("❌ sendToken error:", err);
       const toast = await this.toastCtrl.create({
-        message: `Failed to send ${token.symbol}`,
-        duration: 2000,
+        message: err.message || `Failed to send ${token.symbol}`,
+        duration: 2500,
         position: 'bottom',
         color: 'danger',
         icon: 'close-circle-outline',
@@ -509,7 +617,7 @@ export class HomePage implements OnInit {
         return mint === DUMMY_SOL_MINT ? WSOL_MINT : mint;
       }
 
-      /// 1️⃣ Quote
+      // 1️⃣ Quote
       const quoteRes: any = await this.http.post(`${environment.apiUrl}/wallet/swap/quote`, {
         from: this.activeWallet,
         fromMint: normalizeMint(this.selectedFromToken.mint),
@@ -519,35 +627,57 @@ export class HomePage implements OnInit {
 
       if (!quoteRes.openTransaction) throw new Error("❌ No openTransaction from backend");
 
-      // 2️⃣ Build tx - ADD MISSING PARAMETERS
+      // 2️⃣ Build transaction
       const buildRes: any = await this.http.post(`${environment.apiUrl}/wallet/swap/build`, {
         from: this.activeWallet,
         openTransaction: quoteRes.openTransaction,
         toMint: normalizeMint(this.selectedToToken.mint),
-        fromMint: normalizeMint(this.selectedFromToken.mint), // ADD THIS
-        inAmount: quoteRes.inAmount, // ADD THIS
+        fromMint: normalizeMint(this.selectedFromToken.mint),
+        inAmount: quoteRes.inAmount,
         outAmount: quoteRes.outAmount,
       }).toPromise();
 
       if (!buildRes.tx) throw new Error("❌ No tx from backend build step");
 
-      // 3️⃣ Phantom sign → pakai base64 langsung
+      // Decode base64 transaction
       const tx = web3.Transaction.from(Buffer.from(buildRes.tx, "base64"));
 
-      const signedTx = await (window as any).solana.signTransaction(tx);
+      // ✨ 3️⃣ Tampilkan modal tanda tangan
+      this.toggleSignModal();
+      this.signCompleted = false;
+      this.signRejected = false;
 
+      let signedTx;
+      try {
+        signedTx = await (window as any).solana.signTransaction(tx);
+        this.signCompleted = true; // tampilkan status Signed ✅
+      } catch (signErr: any) {
+        this.signRejected = true; // tampilkan status Rejected ❌
+        console.error('🛑 User rejected or Phantom error', signErr);
+        throw new Error("User rejected the signature");
+      }
+
+      // Tunda sebentar supaya user melihat perubahan modal
+      await new Promise(r => setTimeout(r, 600));
+
+      // Tutup modal tanda tangan
+      this.closeSignModal();
+
+      // 🔄 4️⃣ Submit signed transaction
       const signedTxBase64 = signedTx.serialize().toString("base64");
 
-      // 4️⃣ Submit
       const submitRes: any = await this.http.post(`${environment.apiUrl}/wallet/swap/submit`, {
         signedTx: signedTxBase64,
       }).toPromise();
 
+      // 5️⃣ Simpan tx signature
       this.txSig = submitRes.signature;
 
+      // Refresh data balance & token
       await this.updateBalance();
       await this.loadTokens();
 
+      // ✅ 6️⃣ Tampilkan toast sukses
       const toast = await this.toastCtrl.create({
         message: `Swap successful! ✅`,
         duration: 2500,
@@ -558,13 +688,17 @@ export class HomePage implements OnInit {
       });
       await toast.present();
 
-    } catch (err) {
+    } catch (err: any) {
       await this.updateBalance();
       await this.loadTokens();
 
       console.error("❌ swap error:", err);
+      const msg = err.message?.includes("rejected")
+        ? "Swap cancelled — user rejected the signature."
+        : `Swap failed ❌ ${err.message || err}`;
+        
       const toast = await this.toastCtrl.create({
-        message: `Swap failed ❌ ${err}`,
+        message: msg,
         duration: 2000,
         position: "bottom",
         color: "danger",
@@ -573,6 +707,7 @@ export class HomePage implements OnInit {
       });
       await toast.present();
     } finally {
+      this.closeSignModal();
       this.isSwapping = false;
     }
   }
@@ -588,4 +723,255 @@ export class HomePage implements OnInit {
     });
     await toast.present();
   }
+
+  toggleSignModal() {
+    this.showSignModal = true;
+    this.signCompleted = false;
+    this.signRejected = false;
+  }
+
+  closeSignModal() {
+    this.isClosingSign = true;
+    setTimeout(() => {
+      this.showSignModal = false;
+      this.isClosingSign = false;
+    }, 300);
+  }
+
+  cancelSignModal() {
+    this.signRejected = true;
+  }
+
+  // 🪪 Konfirmasi tanda tangan transaksi
+  async confirmSign() {
+    this.isSigning = true;
+    try {
+      console.log("=== 🪪 CONFIRM SIGN START ===");
+
+      const buildRes: any = this.pendingBuildTx;
+      console.log("🧱 Using pending build tx:", buildRes?.tx?.length || 0);
+
+      // 🚀 Kirim request untuk simpan tx ke pending (sign = pending)
+      const signRes: any = await this.http.post(
+        `${environment.apiUrl}/wallet/send/sign`,
+        { tx: buildRes.tx, wallet: this.activeWallet }
+      ).toPromise();
+
+      console.log("📩 Sign response:", signRes);
+
+      // 🆕 Simpan pendingTxId lebih awal agar bisa dipakai manualSignNow()
+      if (signRes?.txId) {
+        this.pendingTxId = signRes.txId;
+        console.log("💾 Saved pendingTxId:", this.pendingTxId);
+      } else {
+        console.warn("⚠️ Backend did not return txId — manual signing may fail!");
+      }
+
+      // ✅ Kalau status masih pending → tunggu sampai manual sign selesai
+      if (signRes?.status === "pending") {
+        console.log("⏳ Waiting for manual signature... (txId:", this.pendingTxId, ")");
+        let signedTx: string | null = null;
+
+        // loop tunggu status signed
+        for (let i = 0; i < 30; i++) {
+          await new Promise((r) => setTimeout(r, 2000)); // tunggu 2 detik per iterasi
+
+          // 🔍 Cek status di backend
+          const statusRes: any = await this.http
+            .get(`${environment.apiUrl}/wallet/send/status/${this.pendingTxId}`)
+            .toPromise();
+
+          console.log(`... still waiting signature ${i}`);
+
+          if (statusRes?.status === "signed" && statusRes?.signedTx) {
+            console.log("✅ Signature found!");
+            signedTx = statusRes.signedTx;
+            break;
+          }
+        }
+
+        if (!signedTx) throw new Error("❌ No signature after waiting.");
+
+        this.signCompleted = true;
+        this.signedTxBase64 = signedTx;
+      }
+
+      // 🧾 Jika backend langsung kirim signedTx (tanpa pending)
+      else if (signRes?.signedTx) {
+        this.signCompleted = true;
+        this.signedTxBase64 = signRes.signedTx;
+      }
+
+      else {
+        throw new Error("❌ Signing failed — no valid response from backend");
+      }
+
+      // 📤 Submit hasil tanda tangan ke blockchain
+      const submitRes: any = await this.http
+        .post(`${environment.apiUrl}/wallet/send/submit`, {
+          signedTx: this.signedTxBase64,
+        })
+        .toPromise();
+
+      console.log("📤 Submit response:", submitRes);
+      this.txSig = submitRes?.signature ?? null;
+      console.log("✅ Final transaction signature:", this.txSig);
+
+    } catch (err) {
+      console.error("❌ confirmSign error:", err);
+      this.signRejected = true;
+    } finally {
+      this.isSigning = false;
+    }
+  }
+
+  // ✍️ Fungsi untuk pengguna menandatangani manual dari modal
+  async manualSignNow() {
+    try {
+      console.log("🖋️ Manual sign started...");
+      console.log("Current pendingTxId:", this.pendingTxId);
+
+      if (!this.pendingTxId) throw new Error("❌ No pending tx ID found");
+
+      // 🪪 Kirim permintaan tanda tangan manual ke backend
+      const manualSignRes: any = await this.http
+        .post(`${environment.apiUrl}/wallet/send/manual-sign`, {
+          txId: this.pendingTxId,
+        })
+        .toPromise();
+
+      console.log("✅ Manual sign response:", manualSignRes);
+
+      if (manualSignRes?.signedTx) {
+        this.signCompleted = true;
+        this.signedTxBase64 = manualSignRes.signedTx;
+        console.log("✅ Transaction signed manually via modal!");
+      } else {
+        throw new Error("❌ No signedTx returned from manual-sign response");
+      }
+    } catch (err) {
+      console.error("❌ manualSignNow error:", err);
+      this.signRejected = true;
+    }
+  }
+
+  toggleOptionsModal() {
+    this.filteredOptionTokens = this.tokens;
+    this.showOptionsModal = true;
+  }
+
+  resetOptionsModal() {
+    this.isClosingOptions = true;
+    setTimeout(() => {
+      this.showOptionsModal = false;
+      this.isClosingOptions = false;
+      this.selectedOptionToken = null;
+      this.tokenSearchOptions = '';
+      this.searchResults = [];
+    }, 250);
+  }
+
+  onSearchToken(event: Event) {
+    event.preventDefault();
+    const query = this.tokenSearchOptions.trim();
+    if (!query) {
+      this.searchResults = [];
+      this.isSearching = false;
+      return;
+    }
+    this.isSearching = true;
+    this.searchInput$.next(query);
+  }
+
+  // 🔍 Cari token dari jaringan Solana (via Jupiter API)
+  async searchTokenNetwork(query: string): Promise<any[]> {
+    if (!query) return [];
+
+    console.log(`🔍 [searchTokenNetwork] Searching token: "${query}"`);
+    const startTime = Date.now();
+
+    try {
+      const resp: any = await firstValueFrom(
+        this.http.get(`${environment.apiUrl}/token/search?q=${encodeURIComponent(query)}`)
+      );
+
+      const elapsed = Date.now() - startTime;
+      console.log(`⏱️ [searchTokenNetwork] Response time: ${elapsed} ms`);
+      console.log('📦 [searchTokenNetwork] Raw response:', resp);
+
+      // ✅ Solana Tracker pakai "data", bukan "tokens"
+      const data = resp?.data || resp?.tokens || [];
+      console.log(`📊 [searchTokenNetwork] Token count: ${data.length}`);
+
+      const mapped = data.map((t: any) => ({
+        name: t.name,
+        symbol: t.symbol,
+        mint: t.mint,
+        decimals: t.decimals || 9,
+        logoURI: t.image || t.logoURI || 'assets/images/box-item/rank-01.jpg',
+        usdValue: t.priceUsd || 0,
+        liquidity: t.liquidityUsd || 0,
+        volume24h: t.volume_24h || 0,
+        verified: t.verified || false,
+        amount: 0,
+      }));
+
+      console.log('✅ [searchTokenNetwork] Mapped tokens:', mapped);
+      return mapped;
+    } catch (err) {
+      console.error('❌ [searchTokenNetwork] Error searching token on network:', err);
+      return [];
+    }
+  }
+
+  selectOptionToken(token: any) {
+    this.selectedOptionToken = token;
+  }
+
+  async addNewToken(token: any) {
+    try {
+      console.log("✅ Add/Manage token:", token);
+
+      // 🔹 subscribe perubahan activeWallet
+      this.walletService.getActiveWallet().subscribe(async (addr) => {
+        if (addr) {
+          this.activeWallet = addr;
+          console.log('🔄 Active wallet updated in Home:', addr);
+        }
+      });
+      if (!this.activeWallet) {
+        return this.toastCtrl.create({
+          message: "No active wallet found!",
+          duration: 2000,
+          color: "warning",
+        }).then(t => t.present());
+      }
+
+      const payload = { address: this.activeWallet, token };
+      const resp: any = await firstValueFrom(
+        this.http.post(`${environment.apiUrl}/wallet/tokens/add`, payload)
+      );
+
+      console.log("💾 Token added response:", resp);
+
+      await this.toastCtrl.create({
+        message: resp?.success
+          ? `${token.symbol} added to your wallet!`
+          : `${token.symbol} already exists.`,
+        duration: 2000,
+        color: "success",
+      }).then(t => t.present());
+      await this.updateBalance();
+      await this.loadTokens();
+      this.resetOptionsModal();
+    } catch (err) {
+      console.error("❌ Error adding token:", err);
+      await this.toastCtrl.create({
+        message: "Failed to add token. Please try again.",
+        duration: 2000,
+        color: "danger",
+      }).then(t => t.present());
+    }
+  }
+
 }

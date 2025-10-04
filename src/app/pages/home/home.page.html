@@ -69,6 +69,34 @@
                               <li class="item-title">
                                   <span class="inner">Trendings</span>
                               </li>
+                              <li class="item-title">
+                                <div class="row">
+                                    <div class="col-md-12">
+                                        <div class="tf-soft flex items-center justify-between" style="margin-bottom: 0px;">
+                                          <div class="soft-right">
+                                              <div class="dropdown">
+                                                <i class="icon-bullet dropdown-toggle" type="button" id="dropdownMenuButton4" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"></i>
+                                                <div class="dropdown-menu" aria-labelledby="dropdownMenuButton" style="will-change: transform;position: absolute;transform: translate3d(-130px, 35px, 0px);top: 0px;left: 0px;">
+                                                    <h6>Options</h6>
+                                                    <a (click)="toggleOptionsModal()" class="dropdown-item">
+                                                        <div class="sort-filter" href="#">
+                                                            <span>Add new token</span>
+                                                            <span class="icon-tick"><span class="path2"></span></span>
+                                                        </div>
+                                                    </a>
+                                                    <a href="#" class="dropdown-item">
+                                                        <div class="sort-filter" href="#">
+                                                            <span>Show balance</span>
+                                                            <input class="check" type="checkbox" value="checkbox" name="check" checked="">
+                                                        </div>
+                                                    </a>
+                                                </div>
+                                              </div>
+                                          </div>
+                                        </div>
+                                    </div>
+                                </div>
+                              </li>
                           </ul>
                           <div class="widget-content-tab pt-10">
                               <div class="widget-content-inner active">
@@ -80,10 +108,10 @@
                                                       <img src="{{ token.logoURI }}" alt="">
                                                   </div>
                                                   <div class="item-name">
-                                                      {{ token.symbol }}
-                                                      <h6 class="price gem pt-10" [countUp]="token.amount">
-                                                          {{ token.amount }}
-                                                      </h6>
+                                                    {{ token.mint === 'So11111111111111111111111111111111111111112' ? 'Wrapped SOL' : token.symbol }}
+                                                    <h6 class="price gem pt-10" [countUp]="token.amount">
+                                                      {{ token.amount }}
+                                                    </h6>
                                                   </div>
                                               </div>
                                               <div class="td5">
@@ -173,31 +201,6 @@
         </div>
     </div>
     <!-- /#page -->
-
-    <!-- Modal Popup Bid -->
-    <div class="modal fade popup" id="popup_bid" tabindex="-1" role="dialog" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered" role="document">
-            <div class="modal-content">
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-                <div class="modal-body">
-                    <div class="image">
-                        <img src="assets/images/backgroup-section/popup.png" alt="">
-                    </div>
-                    <div class="logo-rotate">
-                        <img class="" src="assets/images/item-background/item6-img.png" alt="">
-                    </div>
-                    <h2>Subscribe to our newsletter</h2>
-                    <p>Subscribe for our newsletter to stay in the loop</p>
-                    <fieldset class="email">
-                        <input type="email" class="style-1" id="email" placeholder="Email address*" name="email" tabindex="2" value="" aria-required="true" required="">
-                    </fieldset>
-                    <a href class="tf-button style-1 h50">Subscribe<i class="icon-arrow-up-right2"></i></a>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <!-- Action sheet --> 
     <div class="custom-action-sheet" *ngIf="showReceiveSheet">
@@ -559,5 +562,149 @@
       </div>
     </div>
 
+    <!-- 🪪 Transaction Signing Modal -->
+    <div class="custom-modal" *ngIf="showSignModal">
+      <div class="modal-backdrop" (click)="cancelSignModal()"></div>
+
+      <div class="modal-sheet" [ngClass]="{ 'slide-up': !isClosingSign, 'slide-down': isClosingSign }">
+        <div *ngIf="!signCompleted && !signRejected">
+          <h2 class="modal-title">Sign Transaction</h2>
+          <p class="text-center">Please sign this transaction in your Universe Wallet.</p>
+
+          <div class="loading-spinner">
+            <ion-spinner name="crescent"></ion-spinner>
+          </div>
+
+          <p class="text-center small-text">Waiting for signature...</p>
+          <div class="modal-actions">
+            <button type="button" class="btn-cancel" (click)="cancelSignModal()">Cancel</button>
+            <button 
+              type="button"
+              class="btn-send"
+              [disabled]="!pendingTxId || isSigning"
+              (click)="manualSignNow()">
+              Sign Now
+            </button>
+          </div>
+        </div>
+
+        <div *ngIf="signCompleted">
+          <h2 class="modal-title">Transaction Signed ✅</h2>
+          <p>Your transaction has been successfully signed.</p>
+          <div class="modal-actions">
+            <button type="button" class="btn-send" (click)="closeSignModal()">Continue</button>
+          </div>
+        </div>
+
+        <div *ngIf="signRejected">
+          <h2 class="modal-title">Signature Rejected ❌</h2>
+          <p>Signing failed. Please try again.</p>
+          <div class="modal-actions">
+            <button type="button" class="btn-cancel" (click)="closeSignModal()">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ⚙️ Options Modal -->
+    <div class="custom-modal" *ngIf="showOptionsModal">
+      <div class="modal-backdrop" (click)="resetOptionsModal()"></div>
+
+      <div class="modal-sheet" [ngClass]="{ 'slide-up': !isClosingOptions, 'slide-down': isClosingOptions }">
+
+        <!-- Step 1: Search Token -->
+        <div *ngIf="!selectedOptionToken">
+          <h2 class="modal-title">Manage Tokens</h2>
+
+          <!-- 🔍 Search bar -->
+          <form action="#" method="get" role="search" class="search-form relative" (submit)="onSearchToken($event)">
+            <input
+              type="search"
+              id="search"
+              class="search-field style-1"
+              placeholder="Search token name or mint..."
+              [(ngModel)]="tokenSearchOptions"
+              name="tokenSearchOptions"
+              title="Search token"
+            />
+            <button class="search search-submit" type="submit" title="Search">
+              <i class="icon-search"></i>
+            </button>
+          </form>
+
+          <!-- ⏳ Loading -->
+          <div *ngIf="isSearching" class="loading-spinner pt-20">
+            <ion-spinner name="crescent"></ion-spinner>
+          </div>
+
+          <!-- 🌐 Network results -->
+          <div class="widget-table-ranking pb-20" *ngIf="!isSearching && searchResults.length > 0">
+            <h5 class="pb-10">Network Results</h5>
+            <div class="table-ranking-content" *ngFor="let token of searchResults" (click)="selectOptionToken(token)">
+              <div class="fl-row-ranking">
+                <div class="td1">
+                  <div class="item-avatar">
+                    <img [src]="token.logoURI" alt="{{ token.symbol }}">
+                  </div>
+                  <div class="item-name">
+                    {{ token.symbol }}
+                    <p class="inner small-text pt-10" style="font-size: 14px">{{ token.name }}</p>
+                    <h6 class="price gem">{{ token.amount }}</h6>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 🔹 Local tokens -->
+          <div class="widget-table-ranking pb-20" *ngIf="!isSearching && filteredOptionTokens.length > 0">
+            <h5 class="pb-10">Your Tokens</h5>
+            <div class="table-ranking-content" *ngFor="let token of filteredOptionTokens" (click)="selectOptionToken(token)">
+              <div class="fl-row-ranking">
+                <div class="td1">
+                  <div class="item-avatar">
+                    <img [src]="token.logoURI" alt="{{ token.symbol }}">
+                  </div>
+                  <div class="item-name">
+                    {{ token.symbol }}
+                    <h6 class="price gem pt-10">{{ token.amount }}</h6>
+                  </div>
+                </div>
+                <div class="td5">
+                  <h6 class="price gem">
+                    ${{ token.usdValue }}
+                  </h6>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 🚫 No results -->
+          <div class="no-result" *ngIf="!isSearching && filteredOptionTokens.length === 0 && searchResults.length === 0">
+            No tokens found
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" class="btn-cancel" (click)="resetOptionsModal()">Close</button>
+          </div>
+        </div>
+
+        <!-- Step 2: Token detail -->
+        <div *ngIf="selectedOptionToken">
+          <h2 class="modal-title">Manage {{ selectedOptionToken.symbol }}</h2>
+          <div class="token-detail text-center">
+            <img [src]="selectedOptionToken.logoURI" width="60" alt="">
+            <h4>{{ selectedOptionToken.symbol }}</h4>
+            <p>Balance: {{ selectedOptionToken.amount || 0 }} (≈ ${{ selectedOptionToken.usdValue || 0 }})</p>
+            <p class="mt-5"><small>{{ selectedOptionToken.mint }}</small></p>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-cancel" (click)="selectedOptionToken = null">Back</button>
+            <button type="button" class="btn-send" (click)="addNewToken(selectedOptionToken)">Add / Manage</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
 </div>
 <!-- /#wrapper -->

@@ -55,11 +55,11 @@
                   <img src="assets/images/google.png" alt="" />
                   <span>Log in with Google</span>
                 </a>
-                <a href="#" class="login-other-item" (click)="connectWallet(); $event.preventDefault();">
+                <!-- <a href="#" class="login-other-item" (click)="connectWallet(); $event.preventDefault();">
                   <img src="assets/images/box-icon/wallet-05.png" alt="" style="height: 25px;" />
                   <span *ngIf="!userAddress">Log in with Phantom</span>
                   <span *ngIf="userAddress">Wallet: {{ shorten(userAddress) }}</span>
-                </a>
+                </a> -->
                 <div *ngIf="userAddress" class="wallet-info mt-3" style="width: 100%;">
                   <button (click)="disconnectWallet()" class="tf-button style-2 h40 mt-2" style="width: 100%;">
                     Disconnect Wallet

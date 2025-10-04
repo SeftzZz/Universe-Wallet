@@ -234,8 +234,13 @@ export class TokenPage implements OnInit {
 
   async ngOnInit() {
     this.route.paramMap.subscribe(async params => {
-      const mint = params.get('mint');
+      let mint = params.get('mint');
       if (mint) {
+        // 🔁 Jika mint = native SOL, ubah ke versi WSOL
+        if (mint === "So11111111111111111111111111111111111111111") {
+          mint = "So11111111111111111111111111111111111111112";
+        }
+
         this.selectedTokenMint = mint;
 
         const saved = localStorage.getItem('walletAddress');

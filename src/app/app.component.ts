@@ -13,6 +13,7 @@ import { HttpClient } from '@angular/common/http';
 import { environment } from '../environments/environment';
 import { User, UserProfile } from './services/user';
 import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
+import { Capacitor } from '@capacitor/core';
 
 declare var bootstrap: any;
 declare function btnmenu(): void;
@@ -29,6 +30,9 @@ export let dappKeys: nacl.BoxKeyPair | null = null;
 export class AppComponent implements AfterViewInit {
   userAddress: string = '';
   private loading: HTMLIonLoadingElement | null = null;
+
+  private phantomFlow: 'connect' | 'signMessage' | null = null;
+  private challengeNonce: string | null = null;
   constructor(
     private router: Router,
     private ngZone: NgZone,
@@ -39,139 +43,7 @@ export class AppComponent implements AfterViewInit {
     private http: HttpClient, 
     private userService: User,
   ) {
-    App.addListener('appUrlOpen', async (data: any) => {
-      console.log('📥 Phantom callback raw URL:', data.url);
-
-      const url = new URL(data.url);
-      url.searchParams.forEach((val, key) => {
-        console.log(`🔑 Param ${key} = ${val}`);
-      });
-
-      const encryptedData = url.searchParams.get('data');
-      const nonce = url.searchParams.get('nonce');
-      const phantomPubKey = url.searchParams.get('phantom_encryption_public_key');
-
-      if (!encryptedData || !nonce || !phantomPubKey) {
-        console.error('❌ Missing params in callback');
-        return;
-      }
-
-      try {
-        // Ambil secret key dari service Phantom atau fallback ke localStorage
-        let secretKey: Uint8Array | null = null;
-        try {
-          secretKey = this.phantom.getSecretKey();
-        } catch (e) {
-          const stored = localStorage.getItem("dappSecretKey");
-          if (stored) {
-            secretKey = bs58.decode(stored);
-            console.warn("⚡ Loaded secretKey from localStorage (service was reset).");
-          }
-        }
-
-        if (!secretKey) {
-          console.error("❌ No secretKey available for decrypt");
-          return;
-        }
-
-        console.log("📥 Encrypted data (b58):", encryptedData);
-        console.log("📥 Nonce (b58):", nonce);
-        console.log("📥 Phantom pubkey (b58):", phantomPubKey);
-
-        const sharedSecret = nacl.box.before(
-          bs58.decode(phantomPubKey),
-          secretKey
-        );
-
-        console.log('🔑 Shared Secret (hex):', Buffer.from(sharedSecret).toString("hex"));
-        console.log('🔑 Shared Secret (b58):', bs58.encode(sharedSecret));
-
-        const decrypted = nacl.box.open.after(
-          bs58.decode(encryptedData),
-          bs58.decode(nonce),
-          sharedSecret
-        );
-
-        if (!decrypted) {
-          console.error('❌ Failed to decrypt Phantom payload');
-          return;
-        }
-
-        const payload = JSON.parse(new TextDecoder().decode(decrypted));
-        console.log('✅ Decrypted payload:', payload);
-
-        if (payload.public_key) {
-          // login ke backend
-          // this.presentLoading('Logging in...');
-
-          // === Desktop (extension Phantom) ===
-          console.log('🖥️ Desktop flow detected.');
-          const provider = (window as any).solana;
-          if (!provider || !provider.isPhantom) {
-            console.warn('❌ Phantom extension not found in browser.');
-            this.showToast('Phantom wallet not available', 'danger');
-            return;
-          }
-
-          this.userAddress = payload.public_key;
-          console.log('⏳ Requesting login challenge from backend...');
-
-          // 1️⃣ Ambil challenge dari backend
-          const challenge: any = await this.http
-            .get(`${environment.apiUrl}/auth/wallet/challenge?address=${this.userAddress}`)
-            .toPromise();
-
-          console.log('📜 Challenge received:', challenge);
-
-          // 2️⃣ Sign challenge message pakai Phantom
-          const messageBytes = new TextEncoder().encode(challenge.message);
-          const signed = await provider.signMessage(messageBytes, "utf8");
-          const signature = signed.signature ? bs58.encode(signed.signature) : null;
-
-          if (!signature) {
-            this.showToast('❌ Signature missing', 'danger');
-            return;
-          }
-
-          // 3️⃣ Kirim hasil sign ke backend
-          this.auth.loginWithWallet({
-            provider: 'phantom',
-            address: this.userAddress,
-            name: 'Phantom User',
-            signature,
-            nonce: challenge.nonce,
-          }).subscribe({
-            next: (res) => {
-              this.dismissLoading();
-              console.log('✅ Wallet login success, backend response:', res);
-
-              this.auth.setToken(res.token, res.authId);
-
-              localStorage.setItem('userId', res.authId);
-              localStorage.setItem('walletAddress', this.userAddress);
-
-              if (res.wallets || res.custodialWallets) {
-                const allWallets = [
-                  ...(res.wallets),
-                  ...(res.custodialWallets)
-                ];
-                localStorage.setItem('wallets', JSON.stringify(allWallets));
-              }
-
-              this.showToast('Wallet connected ✅', 'success');
-              window.location.href = '/tabs/home';
-            },
-            error: (err) => {
-              this.dismissLoading();
-              console.error('❌ Wallet login failed:', err);
-              this.showToast(err.error?.error || 'Wallet login failed', 'danger');
-            }
-          });
-        }
-      } catch (err) {
-        console.error('❌ Error decrypting Phantom response:', err);
-      }
-    });
+    // this.listenPhantomCallback();
 
     this.router.events
     .pipe(filter(event => event instanceof NavigationEnd))
@@ -202,6 +74,227 @@ export class AppComponent implements AfterViewInit {
     GoogleAuth.initialize({
       clientId: '542126096811-asmbfaoqgk3itq0amjjn85q4qvabl3aa.apps.googleusercontent.com',
       scopes: ['profile', 'email'],
+    });
+  }
+
+  /**
+   * Listener untuk callback Phantom (deeplink)
+   */
+  listenPhantomCallback() {
+    App.addListener('appUrlOpen', async (data: any) => {
+      console.log('📥 Phantom callback raw URL:', data.url);
+
+      const url = new URL(data.url);
+      url.searchParams.forEach((val, key) => {
+        console.log(`🔑 Param ${key} = ${val}`);
+      });
+
+      const encryptedData = url.searchParams.get('data');
+      const nonce = url.searchParams.get('nonce');
+      const phantomPubKey = url.searchParams.get('phantom_encryption_public_key');
+      const errorCode = url.searchParams.get('errorCode');
+      const errorMessage = url.searchParams.get('errorMessage');
+
+      // 🚨 Tangani error dari Phantom
+      if (errorCode || errorMessage) {
+        console.error(`❌ Phantom error: ${errorCode} - ${errorMessage}`);
+        return;
+      }
+
+      if (!encryptedData || !nonce || !phantomPubKey) {
+        console.error('❌ Missing params in callback');
+        return;
+      }
+
+      try {
+        // ✅ Simpan phantomPubKey supaya bisa dipakai di signMessage berikutnya
+        localStorage.setItem('phantomPubKey', phantomPubKey);
+
+        // Ambil secretKey dari Phantom service / localStorage
+        let secretKey: Uint8Array | null = null;
+        try {
+          secretKey = this.phantom.getSecretKey();
+        } catch {
+          const stored = localStorage.getItem('dappSecretKey');
+          if (stored) {
+            secretKey = bs58.decode(stored);
+            console.warn('⚡ Loaded secretKey from localStorage (service was reset).');
+          }
+        }
+
+        if (!secretKey) {
+          console.error('❌ No secretKey available for decrypt');
+          return;
+        }
+
+        const sharedSecret = nacl.box.before(
+          bs58.decode(phantomPubKey),
+          secretKey
+        );
+
+        const decrypted = nacl.box.open.after(
+          bs58.decode(encryptedData),
+          bs58.decode(nonce),
+          sharedSecret
+        );
+
+        if (!decrypted) {
+          console.error('❌ Failed to decrypt Phantom payload');
+          return;
+        }
+
+        const payload = JSON.parse(new TextDecoder().decode(decrypted));
+        console.log('✅ Decrypted payload:', payload);
+
+        // === Bedakan antara CONNECT vs SIGN MESSAGE ===
+        if (payload.public_key) {
+          // === CONNECT result ===
+          this.userAddress = payload.public_key;
+          console.log('✅ Phantom mobile connected:', this.userAddress);
+
+          if (payload.session) {
+            localStorage.setItem('phantomSession', payload.session);
+            console.log('💾 Saved Phantom session:', payload.session);
+          }
+
+          // Step berikutnya: ambil challenge & sign
+          this.loginWithBackend(this.userAddress);
+
+        } else if (payload.signature) {
+          // === SIGN MESSAGE result ===
+          console.log('✍️ Phantom signature received:', payload.signature);
+
+          // Ambil nonce yg dipakai waktu generate deeplink signMessage
+          const nonceFromLocal = localStorage.getItem('lastNonce') || '';
+
+          this.finishLogin(this.userAddress, payload.signature, nonceFromLocal);
+        }
+      } catch (err) {
+        console.error('❌ Error decrypting Phantom response:', err);
+      }
+    });
+  }
+
+  /**
+   * Login ke backend setelah dapat public_key dari Phantom
+   */
+  async loginWithBackend(address: string) {
+    console.log('⏳ Requesting login challenge from backend...');
+    const challenge: any = await this.http
+      .get(`${environment.apiUrl}/auth/wallet/challenge?address=${address}`)
+      .toPromise();
+
+    console.log('📜 Challenge received:', challenge);
+
+    if (Capacitor.getPlatform() === 'web') {
+      // 🖥️ Desktop: sign via Phantom extension
+      const provider = (window as any).solana;
+      if (!provider || !provider.isPhantom) {
+        console.error('❌ Phantom extension not found.');
+        return;
+      }
+
+      const messageBytes = new TextEncoder().encode(challenge.message);
+      const signed = await provider.signMessage(messageBytes, 'utf8');
+      const signature = signed.signature ? bs58.encode(signed.signature) : undefined;
+
+      if (!signature) {
+        console.error('❌ No signature returned from Phantom extension');
+        return;
+      }
+
+      this.finishLogin(address, signature, challenge.nonce);
+
+    } else {
+      // 📱 Mobile: sign via deeplink
+      try {
+        const dappPubKey = this.phantom.getPublicKeyB58();
+        const redirect = 'universeofgamers://phantom-callback';
+
+        // ✅ ambil phantom pubkey dari connect callback
+        const phantomPubKey = localStorage.getItem('phantomPubKey');
+        if (!phantomPubKey) {
+          console.error('❌ phantomPubKey not found in localStorage (connect step missing)');
+          return;
+        }
+
+        // ✅ secret key dapp
+        const secretKey = this.phantom.getSecretKey();
+        if (!secretKey) {
+          console.error('❌ No secretKey available for Phantom session');
+          return;
+        }
+
+        // ✅ nonce baru khusus signMessage
+        const nonceArr = nacl.randomBytes(24);
+        const nonceB58 = bs58.encode(nonceArr);
+
+        // ✅ derive shared secret dari phantom pubkey
+        const sharedSecret = nacl.box.before(
+          bs58.decode(phantomPubKey),
+          secretKey
+        );
+
+        // ✅ build payload sesuai spesifikasi Phantom
+        const session = localStorage.getItem('phantomSession');
+        const payloadObj = {
+          session,
+          message: challenge.message,
+          display: 'utf8',
+        };
+        const payloadBytes = new TextEncoder().encode(JSON.stringify(payloadObj));
+
+        const encryptedPayload = nacl.box.after(payloadBytes, nonceArr, sharedSecret);
+        const payloadB58 = bs58.encode(encryptedPayload);
+
+        // ✅ signMessage deeplink
+        const signUrl =
+          `https://phantom.app/ul/v1/signMessage?` +
+          `dapp_encryption_public_key=${dappPubKey}` +
+          `&redirect_link=${redirect}` +
+          `&nonce=${nonceB58}` +
+          `&payload=${payloadB58}`;
+
+        console.log('🔗 Open signMessage URL:', signUrl);
+        window.location.href = signUrl;
+
+      } catch (err) {
+        console.error('❌ Failed to open signMessage link:', err);
+      }
+    }
+  }
+
+  /**
+   * Kirim hasil login ke backend
+   */
+  finishLogin(address: string, signature: string | null, nonce: string) {
+    this.auth.loginWithWallet({
+      provider: 'phantom',
+      address,
+      name: 'Phantom User',
+      signature: signature || "",   // ✅ fix TS error
+      nonce,
+    }).subscribe({
+      next: (res) => {
+        console.log('✅ Wallet login success:', res);
+        this.auth.setToken(res.token, res.authId);
+
+        localStorage.setItem('userId', res.authId);
+        localStorage.setItem('walletAddress', address);
+
+        if (res.wallets || res.custodialWallets) {
+          const allWallets = [
+            ...(res.wallets || []),
+            ...(res.custodialWallets || [])
+          ];
+          localStorage.setItem('wallets', JSON.stringify(allWallets));
+        }
+
+        window.location.href = '/tabs/home';
+      },
+      error: (err) => {
+        console.error('❌ Wallet login failed:', err);
+      }
     });
   }
 
