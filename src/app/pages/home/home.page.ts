@@ -270,7 +270,7 @@ export class HomePage implements OnInit {
         .get(`${environment.apiUrl}/wallet/balance/${this.activeWallet}`)
         .toPromise();
 
-      this.balance = resp.solBalance;
+      this.balance = resp.solTotal;
       this.balanceUsd = resp.usdValue;
       this.trend = resp.trend ?? 0;
       this.percentChange = resp.percentChange ?? 0;
@@ -598,6 +598,7 @@ export class HomePage implements OnInit {
 
   async swapTokens(event: Event) {
     event.preventDefault();
+
     if (
       !this.swapAmount ||
       this.swapAmount <= 0 ||
@@ -613,71 +614,108 @@ export class HomePage implements OnInit {
       const WSOL_MINT = "So11111111111111111111111111111111111111112";
       const DUMMY_SOL_MINT = "So11111111111111111111111111111111111111111";
 
-      function normalizeMint(mint: string): string {
-        return mint === DUMMY_SOL_MINT ? WSOL_MINT : mint;
-      }
+      const normalizeMint = (mint: string) =>
+        mint === DUMMY_SOL_MINT ? WSOL_MINT : mint;
 
-      // 1️⃣ Quote
-      const quoteRes: any = await this.http.post(`${environment.apiUrl}/wallet/swap/quote`, {
-        from: this.activeWallet,
-        fromMint: normalizeMint(this.selectedFromToken.mint),
-        toMint: normalizeMint(this.selectedToToken.mint),
-        amount: this.swapAmount,
-      }).toPromise();
+      // 🧱 1️⃣ Get Quote
+      const quoteRes: any = await this.http.post(
+        `${environment.apiUrl}/wallet/swap/quote`,
+        {
+          from: this.activeWallet,
+          fromMint: normalizeMint(this.selectedFromToken.mint),
+          toMint: normalizeMint(this.selectedToToken.mint),
+          amount: this.swapAmount,
+        }
+      ).toPromise();
 
-      if (!quoteRes.openTransaction) throw new Error("❌ No openTransaction from backend");
+      if (!quoteRes?.openTransaction)
+        throw new Error("❌ No openTransaction from backend");
 
-      // 2️⃣ Build transaction
-      const buildRes: any = await this.http.post(`${environment.apiUrl}/wallet/swap/build`, {
-        from: this.activeWallet,
-        openTransaction: quoteRes.openTransaction,
-        toMint: normalizeMint(this.selectedToToken.mint),
-        fromMint: normalizeMint(this.selectedFromToken.mint),
-        inAmount: quoteRes.inAmount,
-        outAmount: quoteRes.outAmount,
-      }).toPromise();
+      // 🧱 2️⃣ Build Unsigned Transaction
+      const buildRes: any = await this.http.post(
+        `${environment.apiUrl}/wallet/swap/build`,
+        {
+          from: this.activeWallet,
+          openTransaction: quoteRes.openTransaction,
+          toMint: normalizeMint(this.selectedToToken.mint),
+          fromMint: normalizeMint(this.selectedFromToken.mint),
+          inAmount: quoteRes.inAmount,
+          outAmount: quoteRes.outAmount,
+        }
+      ).toPromise();
 
-      if (!buildRes.tx) throw new Error("❌ No tx from backend build step");
+      if (!buildRes?.tx) throw new Error("❌ No tx returned from backend build step");
+      this.pendingBuildTx = buildRes;
 
-      // Decode base64 transaction
-      const tx = web3.Transaction.from(Buffer.from(buildRes.tx, "base64"));
+      // 🪪 3️⃣ Save TX as Pending (use /wallet/send/sign)
+      const signRes: any = await this.http.post(
+        `${environment.apiUrl}/wallet/send/sign`,
+        { tx: buildRes.tx, wallet: this.activeWallet }
+      ).toPromise();
 
-      // ✨ 3️⃣ Tampilkan modal tanda tangan
+      if (!signRes?.txId)
+        throw new Error("❌ Missing txId from sign response");
+
+      this.pendingTxId = signRes.txId;
+      console.log("💾 Saved pendingTxId:", this.pendingTxId);
+
+      // ✨ 4️⃣ Tampilkan modal tanda tangan
       this.toggleSignModal();
       this.signCompleted = false;
       this.signRejected = false;
 
-      let signedTx;
-      try {
-        signedTx = await (window as any).solana.signTransaction(tx);
-        this.signCompleted = true; // tampilkan status Signed ✅
-      } catch (signErr: any) {
-        this.signRejected = true; // tampilkan status Rejected ❌
-        console.error('🛑 User rejected or Phantom error', signErr);
-        throw new Error("User rejected the signature");
+      let signedTx: string | null = null;
+
+      // ⏳ 5️⃣ Polling status signature (manual sign)
+      if (signRes?.status === "pending") {
+        console.log("⏳ Waiting for manual signature...");
+
+        for (let i = 0; i < 30; i++) {
+          await new Promise(r => setTimeout(r, 2000));
+
+          const statusRes: any = await this.http
+            .get(`${environment.apiUrl}/wallet/send/status/${this.pendingTxId}`)
+            .toPromise();
+
+          console.log(`... waiting for signature ${i}`);
+
+          if (statusRes?.status === "signed" && statusRes?.signedTx) {
+            console.log("✅ Signature found!");
+            signedTx = statusRes.signedTx;
+            this.signCompleted = true;
+            break;
+          }
+        }
+
+        if (!signedTx) throw new Error("Timeout waiting for signature");
+        this.signedTxBase64 = signedTx;
+      } 
+      else if (signRes?.signedTx) {
+        // langsung signed
+        this.signCompleted = true;
+        this.signedTxBase64 = signRes.signedTx;
+      } 
+      else {
+        throw new Error("❌ Signing failed");
       }
 
-      // Tunda sebentar supaya user melihat perubahan modal
-      await new Promise(r => setTimeout(r, 600));
+      // 🔄 6️⃣ Submit Signed Transaction (swap/submit)
+      const submitRes: any = await this.http.post(
+        `${environment.apiUrl}/wallet/swap/submit`,
+        { signedTx: this.signedTxBase64 }
+      ).toPromise();
 
-      // Tutup modal tanda tangan
-      this.closeSignModal();
+      if (!submitRes?.signature)
+        throw new Error("❌ No signature from submit response");
 
-      // 🔄 4️⃣ Submit signed transaction
-      const signedTxBase64 = signedTx.serialize().toString("base64");
-
-      const submitRes: any = await this.http.post(`${environment.apiUrl}/wallet/swap/submit`, {
-        signedTx: signedTxBase64,
-      }).toPromise();
-
-      // 5️⃣ Simpan tx signature
       this.txSig = submitRes.signature;
 
-      // Refresh data balance & token
+      // 🔃 7️⃣ Refresh balance & token list
       await this.updateBalance();
       await this.loadTokens();
+      this.closeSignModal();
 
-      // ✅ 6️⃣ Tampilkan toast sukses
+      // ✅ 8️⃣ Success Toast
       const toast = await this.toastCtrl.create({
         message: `Swap successful! ✅`,
         duration: 2500,
@@ -689,26 +727,21 @@ export class HomePage implements OnInit {
       await toast.present();
 
     } catch (err: any) {
-      await this.updateBalance();
-      await this.loadTokens();
+      console.error("❌ swapTokens error:", err);
 
-      console.error("❌ swap error:", err);
-      const msg = err.message?.includes("rejected")
-        ? "Swap cancelled — user rejected the signature."
-        : `Swap failed ❌ ${err.message || err}`;
-        
       const toast = await this.toastCtrl.create({
-        message: msg,
-        duration: 2000,
+        message: err.message || `Failed to swap ${this.selectedFromToken.symbol}`,
+        duration: 2500,
         position: "bottom",
         color: "danger",
         icon: "close-circle-outline",
         cssClass: "custom-toast",
       });
       await toast.present();
+
     } finally {
-      this.closeSignModal();
       this.isSwapping = false;
+      this.closeSignModal();
     }
   }
 
