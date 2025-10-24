@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, NgZone, OnInit } from '@angular/core';
 import { environment } from '../../../environments/environment';
 import { HttpClient } from '@angular/common/http';
 import { Auth } from '../../services/auth';
@@ -7,6 +7,7 @@ import { Modal } from '../../services/modal';
 import { User, UserProfile } from '../../services/user';
 
 import { ToastController, LoadingController } from '@ionic/angular';
+import { Router } from '@angular/router';
 
 @Component({
   selector: 'app-tabs',
@@ -38,7 +39,10 @@ export class TabsPage implements OnInit {
     private walletService: Wallet,
     private modalService: Modal,
     private userService: User,
+    private ngZone: NgZone,
     private toastCtrl: ToastController,
+    private router: Router,
+    private loadingCtrl: LoadingController,
   ) {}
 
   ngOnInit() {
@@ -314,6 +318,47 @@ export class TabsPage implements OnInit {
       localStorage.setItem('wallets', JSON.stringify(this.wallets));
     } catch (err) {
       console.error('❌ Error fetch balance for wallet:', address, err);
+    }
+  }
+
+  async showLoading(message: string = 'Loading...') {
+    const loading = await this.loadingCtrl.create({
+      message,
+      spinner: 'crescent',
+    });
+    await loading.present();
+    return loading;
+  }
+
+  async logout() {
+    this.closeMobileNav();
+    const loading = await this.showLoading('Logging out...');
+
+    try {
+      // Jalankan dalam Angular zone agar UI ikut update
+      this.ngZone.run(async () => {
+        await this.auth.logout();
+
+        // 🧹 Bersihkan wallet
+        this.walletService.setActiveWallet(''); // <-- pastikan BehaviorSubject dikosongkan
+        this.walletService.setWallets([]);        // opsional
+        localStorage.removeItem('walletAddress');
+        localStorage.removeItem('wallets');
+
+        // 🧹 Bersihkan auth info
+        localStorage.removeItem('userId');
+        localStorage.removeItem('token');
+
+        this.activeWallet = null; // update lokal
+        this.profile = {} as any;
+
+        // 🚀 Redirect ke halaman umum (tanpa guard)
+        this.router.navigate(['/login']);
+      });
+    } catch (err) {
+      console.error('❌ Logout error:', err);
+    } finally {
+      loading.dismiss();
     }
   }
 }

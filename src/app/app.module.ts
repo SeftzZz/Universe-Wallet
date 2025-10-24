@@ -18,6 +18,8 @@ import { SharedModule } from './shared/shared.module';
 
 import { QRCodeComponent } from 'angularx-qrcode';
 
+import { ZXingScannerModule } from '@zxing/ngx-scanner';
+
 @NgModule({
   declarations: [AppComponent],
   imports: [
@@ -27,7 +29,8 @@ import { QRCodeComponent } from 'angularx-qrcode';
     HttpClientModule,
     BrowserAnimationsModule,
     SharedModule,
-    QRCodeComponent
+    QRCodeComponent,
+    ZXingScannerModule
   ],
   providers: [
     // provider routing

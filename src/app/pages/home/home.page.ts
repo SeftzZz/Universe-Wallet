@@ -13,7 +13,7 @@ import { WalletNftPage } from '../wallet-nft/wallet-nft.page';
 import { Router } from '@angular/router';
 
 import { ActionSheetController } from '@ionic/angular';
-import { ToastController, LoadingController } from '@ionic/angular';
+import { ToastController, LoadingController, Platform } from '@ionic/angular';
 import {
   trigger,
   transition,
@@ -24,6 +24,9 @@ import {
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import { of, Subject, firstValueFrom } from 'rxjs';
 import { NgZone } from '@angular/core';
+
+import { BarcodeScanner } from '@capacitor-community/barcode-scanner';
+import { CameraPreview } from '@capacitor-community/camera-preview';
 
 interface SignResponse {
   signedTx?: string;   // optional, bisa kosong saat status pending
@@ -128,6 +131,10 @@ export class HomePage implements OnInit {
   selectedOptionToken: any = null;
   searchInput$ = new Subject<string>();
 
+  showScanner = false;
+  scannedText: string | null = null;
+  scanning = false;
+
   constructor(
     private http: HttpClient, 
     private idlService: Idl, 
@@ -140,6 +147,7 @@ export class HomePage implements OnInit {
     private modalService: Modal,
     private userService: User,
     private zone: NgZone,
+    private platform: Platform
   ) {
     this.dismissLoading();
 
@@ -235,6 +243,10 @@ export class HomePage implements OnInit {
       this.loadNfts();
       this.loadTrendingTokens();
     }
+  }
+
+  async ionViewWillLeave() {
+    await this.stopScan();
   }
 
   async connectWallet() {
@@ -397,8 +409,14 @@ export class HomePage implements OnInit {
     }
   }
 
-  toggleSendModal() {
+  async toggleSendModal() {
     this.showSendModal = true;
+
+    // refresh data setiap kali wallet diganti
+    await this.updateBalance();
+    await this.loadTokens();
+    await this.loadNfts();
+    await this.loadTrendingTokens();
   }
 
   get filteredTokens() {
@@ -457,6 +475,20 @@ export class HomePage implements OnInit {
 
       if (!buildRes?.tx) throw new Error("❌ No tx returned from backend");
       this.pendingBuildTx = buildRes;
+
+      console.log(
+        "🧾 Sending sign request:",
+        JSON.stringify(
+          {
+            tx: buildRes?.tx
+              ? buildRes.tx.substring(0, 50) + "..."
+              : "(missing)",
+            wallet: this.activeWallet || "(missing)",
+          },
+          null,
+          2
+        )
+      );
 
       // 🪪 2️⃣ Request to save TX as pending (server creates txId)
       const signRes: any = await this.http.post(
@@ -535,7 +567,7 @@ export class HomePage implements OnInit {
       await toast.present();
 
     } catch (err: any) {
-      console.error("❌ sendToken error:", err);
+      console.error("❌ sendToken error:", JSON.stringify(err.message));
       const toast = await this.toastCtrl.create({
         message: err.message || `Failed to send ${token.symbol}`,
         duration: 2500,
@@ -557,8 +589,14 @@ export class HomePage implements OnInit {
     this.selectedToken = null;
   }
 
-  toggleSwapModal() {
+  async toggleSwapModal() {
     this.showSwapModal = true;
+
+    // refresh data setiap kali wallet diganti
+    await this.updateBalance();
+    await this.loadTokens();
+    await this.loadNfts();
+    await this.loadTrendingTokens();
   }
 
   resetSwapModal() {
@@ -702,7 +740,14 @@ export class HomePage implements OnInit {
       // 🔄 6️⃣ Submit Signed Transaction (swap/submit)
       const submitRes: any = await this.http.post(
         `${environment.apiUrl}/wallet/swap/submit`,
-        { signedTx: this.signedTxBase64 }
+        {
+          signedTx: this.signedTxBase64,
+          inAmount: quoteRes.inAmount,
+          outAmount: quoteRes.outAmount,
+          from: this.activeWallet,
+          fromMint: normalizeMint(this.selectedFromToken.mint),
+          toMint: normalizeMint(this.selectedToToken.mint)
+        }
       ).toPromise();
 
       if (!submitRes?.signature)
@@ -1007,4 +1052,48 @@ export class HomePage implements OnInit {
     }
   }
 
+  async toggleScanner() {
+    if (this.scanning) {
+      await this.stopScan();
+    } else {
+      await this.startScan();
+    }
+  }
+
+  async startScan(): Promise<void> {
+    try {
+      console.log('📷 Requesting permission...');
+      const status = await BarcodeScanner.checkPermission({ force: true });
+      if (!status.granted) return;
+
+      await BarcodeScanner.hideBackground();
+      document.body.classList.add('scanner-active');
+      this.scanning = true;
+
+      const result = await BarcodeScanner.startScan();
+      if (result.hasContent) {
+        console.log('✅ QR Content:', result.content);
+        this.recipient = result.content;
+
+        const toast = await this.toastCtrl.create({
+          message: `✅ Address scanned: ${result.content}`,
+          duration: 2500,
+          color: 'success',
+        });
+        await toast.present();
+      }
+    } catch (err) {
+      console.error('❌ Scan failed', err);
+    } finally {
+      await this.stopScan();
+    }
+  }
+
+  async stopScan() {
+    console.log('🚫 Stopping scanner...');
+    await BarcodeScanner.showBackground();
+    await BarcodeScanner.stopScan();
+    document.body.classList.remove('scanner-active');
+    this.scanning = false;
+  }
 }

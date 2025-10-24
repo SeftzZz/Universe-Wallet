@@ -45,6 +45,10 @@ const routes: Routes = [
         loadChildren: () => import('../settings/settings.module').then( m => m.SettingsPageModule)
       },
       {
+        path: 'transactions',
+        loadChildren: () => import('../transactions/transactions.module').then( m => m.TransactionsPageModule)
+      },
+      {
         path: '',
         redirectTo: '/tabs/home',
         pathMatch: 'full'

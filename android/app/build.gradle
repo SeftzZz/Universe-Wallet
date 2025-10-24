@@ -9,8 +9,8 @@ android {
     applicationId "com.universeofgamers.wallet"
     minSdkVersion rootProject.ext.minSdkVersion
     targetSdkVersion rootProject.ext.targetSdk
-    versionCode 11
-    versionName "1.2.13102025"
+    versionCode 13
+    versionName "1.2.24102025"
     testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     aaptOptions {
       ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'

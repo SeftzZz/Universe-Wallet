@@ -13,17 +13,17 @@
                 <div class="row">
                     <div class="col-12 pages-title">
                         <div class="content">
-                            <h1 *ngIf="balance !== null">
+                            <!-- <h1 *ngIf="balance !== null">
                               <span [countUp]="balance" suffix=" SOL" [duration]="2000"></span>
-                            </h1>
+                            </h1> -->
 
-                            <h4 class="pb-10" *ngIf="totalBalanceUsd !== null" id="balanceUsdValue">
+                            <h1 class="pb-10" *ngIf="totalBalanceUsd !== null" id="balanceUsdValue">
                               <span [countUp]="totalBalanceUsd" prefix="$" [duration]="2000"></span>
-                              <span [ngClass]="trend > 0 ? 'warning' : (trend < 0 ? 'danger' : '')">
+                              <!-- <span [ngClass]="trend > 0 ? 'warning' : (trend < 0 ? 'danger' : '')">
                                 {{ trend > 0 ? '+' : ''}}{{ percentChange | number:'1.2-2' }}%
-                              </span>
-                              <i [ngClass]="trend > 0 ? 'icon-arrow-up2 warning' : (trend < 0 ? 'icon-arrow-down2 danger' : '')"></i>
-                            </h4>
+                              </span> -->
+                              <!-- <i [ngClass]="trend > 0 ? 'icon-arrow-up2 warning' : (trend < 0 ? 'icon-arrow-down2 danger' : '')"></i> -->
+                            </h1>
                             <ul class="widget-menu-tab">
                                 <li class="item-title" (click)="toggleReceiveSheet()">
                                     <i class="icon-arrow-down2"></i>
@@ -164,7 +164,7 @@
                                           <img [src]="token.logoURI || 'assets/images/box-icon/coin-01.png'" alt="" />
                                         </div>
                                         <div class="item-name">
-                                          {{ shorten(token.symbol) }}
+                                          {{ token.symbol }}
                                           <h6 class="price gem pt-10">
                                             ${{ token.priceUsd | number:'1.6-6' }}
                                           </h6>
@@ -302,23 +302,22 @@
         <div *ngIf="selectedToken && !isSending && !txSig">
           <h2 class="modal-title">Send {{ selectedToken.symbol }}</h2>
 
-          <form (submit)="sendToken($event)">
-            <div class="form-group">
-              <label for="recipient">Recipient Address</label>
-              <input
-                type="text"
-                id="recipient"
-                class="search-field style-1"
-                placeholder="Address..."
-                [(ngModel)]="recipient"
-                name="recipient"
-                required
-                title="Address"
-              />
-            </div>
+          <form (submit)="sendToken($event)" class="search-form relative">
+            <input
+              type="text"
+              id="recipient"
+              class="search-field style-1"
+              placeholder="Address..."
+              [(ngModel)]="recipient"
+              name="recipient"
+              required
+              title="Address"
+            />
+            <button class="search search-submit" (click)="!scanning && toggleScanner()">
+              <ion-icon name="qr-code-outline"></ion-icon>
+            </button>
 
-            <div class="form-group">
-              <label for="amount">Amount ({{ selectedToken.symbol }})</label>
+            <div class="form-group pt-10">
               <input
                 type="number"
                 id="amount"
@@ -331,9 +330,9 @@
                 title="Amount"
                 [max]="selectedToken.amount"
               />
-              <small class="balance-info">
+              <h5 class="price gem warning">
                 Balance: {{ selectedToken.amount }} {{ selectedToken.symbol }}
-              </small>
+              </h5>
             </div>
 
             <div class="modal-actions">
@@ -518,7 +517,9 @@
                 min="0"
                 class="search-field style-1"
               >
-              <p>Balance: {{ selectedFromToken.amount }}</p>
+              <h5 class="price gem warning">
+                Balance: {{ selectedFromToken.amount }}
+              </h5>
 
               <!-- Tombol cepat -->
               <div class="quick-buttons">
@@ -541,9 +542,11 @@
         </div>
 
         <!-- Step 4: Loading -->
-        <div *ngIf="isSwapping && !txSig" class="step-4">
+        <div *ngIf="isSwapping && !txSig" class="step-4 ">
           <h2 class="modal-title">Processing Swap...</h2>
-          <ion-spinner name="crescent"></ion-spinner>
+          <div class="loading-spinner">
+            <ion-spinner name="crescent"></ion-spinner>
+          </div>
         </div>
 
         <!-- Step 5: Success -->
@@ -649,7 +652,7 @@
                   <div class="item-name">
                     {{ token.symbol }}
                     <p class="inner small-text pt-10" style="font-size: 14px">{{ token.name }}</p>
-                    <h6 class="price gem">{{ token.amount }}</h6>
+                    <h6 class="price gem warning">{{ token.amount }}</h6>
                   </div>
                 </div>
               </div>
@@ -667,11 +670,11 @@
                   </div>
                   <div class="item-name">
                     {{ token.symbol }}
-                    <h6 class="price gem pt-10">{{ token.amount }}</h6>
+                    <h6 class="price gem pt-10 warning">{{ token.amount }}</h6>
                   </div>
                 </div>
                 <div class="td5">
-                  <h6 class="price gem">
+                  <h6 class="price gem warning">
                     ${{ token.usdValue }}
                   </h6>
                 </div>
@@ -706,5 +709,14 @@
 
       </div>
     </div>
+
+    <!-- QR Scanner Section -->
+    <div *ngIf="showScanner" class="qr-overlay">
+      <div id="scanner-frame" class="scanner-frame"></div>
+      <div class="scanner-controls">
+        <button type="button" class="btn-cancel" (click)="stopScan()">Cancel</button>
+      </div>
+    </div>
+
 </div>
 <!-- /#wrapper -->

@@ -24,17 +24,9 @@
                                 </div><!-- /.mobile-button -->
                                 <div class="flat-wallet flex">
                                     <div class="header-search relative">
-                                        <a href="#" class="show-search">
-                                            <i class="icon-search"></i>
+                                        <a [routerLink]="['/tabs/transactions']" class="show-search">
+                                            <i class="icon-time"></i>
                                         </a>
-                                        <div class="top-search">
-                                            <form action="#" method="get" role="search" class="search-form relative">
-                                                <input type="search" id="search" class="search-field style-1" placeholder="Search..." value="" name="s" title="Search for" required="">
-                                                <button class="search search-submit" type="submit" title="Search">
-                                                    <i class="icon-search"></i>
-                                                </button>
-                                            </form> 
-                                        </div>
                                     </div>
                                 </div>
                             </div> 
@@ -77,6 +69,11 @@
                     <li class="menu-item">
                       <a class="item-menu-mobile" [routerLink]="['/tabs/settings']" (click)="closeMobileNav()">
                         Settings
+                      </a>
+                    </li>
+                    <li class="menu-item">
+                      <a class="item-menu-mobile" (click)="logout()">
+                        Logout
                       </a>
                     </li>
                   </ul>

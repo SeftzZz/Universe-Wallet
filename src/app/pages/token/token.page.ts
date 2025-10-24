@@ -3,19 +3,28 @@ import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
 import { Idl } from '../../services/idl';
+import { Wallet } from '../../services/wallet';
+import { Auth } from '../../services/auth';
+import { Modal } from '../../services/modal';
+import { User, UserProfile } from '../../services/user';
+const web3 = require('@solana/web3.js');
 
 import { WalletNftPage } from '../wallet-nft/wallet-nft.page';
-import { Router } from '@angular/router';
-import { ActivatedRoute } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
 
 import { ActionSheetController } from '@ionic/angular';
-import { ToastController } from '@ionic/angular';
+import { ToastController, LoadingController } from '@ionic/angular';
 import {
   trigger,
   transition,
   style,
   animate
 } from '@angular/animations';
+
+import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
+import { of, Subject, firstValueFrom } from 'rxjs';
+import { NgZone } from '@angular/core';
+import { Platform } from '@ionic/angular';
 
 import {
   ChartConfiguration,
@@ -133,11 +142,23 @@ interface TokenInfoResponse {
 export class TokenPage implements OnInit {
   program: any;
 
+  name: string = '';
+  email: string = '';
+  oldPassword: string = '';
+  newPassword: string = '';
+  confirmPassword: string = '';
+  notifyNewItems: boolean = false;
+  notifyEmail: boolean = false;
+  avatarFile: File | null = null;
+  avatar: string = '';
+
   userAddress: string | null = null;
   balance: number | null = null;
   balanceUsd: number | null = null;
   tokenPriceUsd: number | null = null;
   solPriceUsd: number | null = null;
+  totalBalanceUsd: number | null = null;
+  totalBalanceSol: number | null = null;
   uploadForm!: FormGroup;
   blockchainSelected: string | null = null;
   private lastBalanceUsd: number | null = null;
@@ -146,6 +167,7 @@ export class TokenPage implements OnInit {
 
   tokens: any[] = [];
   nfts: any[] = [];
+  activeWallet: string = '';
 
   showReceiveSheet = false;
   isClosing = false;
@@ -223,37 +245,230 @@ export class TokenPage implements OnInit {
   isClosingTx = false;
   selectedTx: any = null;
 
+  showSignModal = false;
+  isClosingSign = false;
+  signCompleted = false;
+  signRejected = false;
+  isSigning = false;
+  pendingBuildTx: any = null;       // Menyimpan hasil /wallet/send/build sementara
+  signedTxBase64: string | null = null;  // Menyimpan hasil tanda tangan base64
+  pendingTxId: string | null = null;
+
+  showOptionsModal = false;
+  isClosingOptions = false;
+  tokenSearchOptions = '';
+  filteredOptionTokens: any[] = [];
+  searchResults: any[] = [];
+  isSearching = false;
+  selectedOptionToken: any = null;
+  searchInput$ = new Subject<string>();
+
+  private loading: HTMLIonLoadingElement | null = null;
+
+  groupedTrades: { label: string; trades: any[] }[] = [];
+
   constructor(
     private http: HttpClient, 
     private idlService: Idl, 
     private router: Router, 
     private actionSheetCtrl: ActionSheetController,
     private toastCtrl: ToastController,
-    private route: ActivatedRoute
-  ) {}
+    private loadingCtrl: LoadingController,
+    private auth: Auth,
+    private walletService: Wallet,
+    private modalService: Modal,
+    private userService: User,
+    private zone: NgZone,
+    private route: ActivatedRoute,
+    private platform: Platform,
+  ) {
+    this.dismissLoading();
+
+    // ✅ Deteksi tombol back HP
+    this.platform.backButton.subscribeWithPriority(10, async () => {
+      // Jika modal swap sedang terbuka, tutup dulu
+      if (this.showSwapModal) {
+        this.resetSwapModal();
+        return;
+      }
+
+      // Jika modal send sedang terbuka, tutup dulu
+      if (this.showSendModal) {
+        this.resetSendModal();
+        return;
+      }
+
+      // Kalau ada modal lain, tutup juga sesuai prioritas
+      if (this.showTxModal) {
+        this.closeTxModal();
+        return;
+      }
+
+      // Kalau tidak ada modal aktif → navigasi kembali
+      this.router.navigateByUrl('/tabs/home', { replaceUrl: false });
+    });
+
+    // ✅ Debounce input untuk pencarian jaringan
+    this.searchInput$
+      .pipe(
+        debounceTime(400),
+        distinctUntilChanged(),
+        switchMap((query) => this.searchTokenNetwork(query))
+      )
+      .subscribe({
+        next: (results) => {
+          // pastikan update view dilakukan di dalam zone
+          this.zone.run(() => {
+            this.searchResults = results;
+            this.isSearching = false;
+          });
+        },
+        error: (err) => {
+          console.error('❌ Search token error', err);
+          this.isSearching = false;
+        },
+      });
+  }
 
   async ngOnInit() {
-    this.route.paramMap.subscribe(async params => {
-      let mint = params.get('mint');
-      if (mint) {
-        // 🔁 Jika mint = native SOL, ubah ke versi WSOL
-        if (mint === "So11111111111111111111111111111111111111111") {
-          mint = "So11111111111111111111111111111111111111112";
+    let loading: HTMLIonLoadingElement | null = null;
+
+    try {
+      // 🌀 1️⃣ Tampilkan loading sejak awal
+      loading = await this.loadingCtrl.create({
+        message: 'Loading token data...',
+        spinner: 'crescent',
+        cssClass: 'custom-loading'
+      });
+      await loading.present();
+
+      this.route.paramMap.subscribe(async (params) => {
+        let mint = params.get('mint');
+        if (mint) {
+          // 🔁 Jika mint = native SOL, ubah ke WSOL
+          if (mint === "So11111111111111111111111111111111111111111") {
+            mint = "So11111111111111111111111111111111111111112";
+          }
+
+          this.selectedTokenMint = mint;
+
+          const saved = localStorage.getItem('walletAddress');
+          if (saved) {
+            this.userAddress = saved;
+            await this.updateBalance();
+
+            // 🧭 2️⃣ Panggil loadWalletTrades dengan loading di dalamnya
+            await this.loadWalletTrades(mint); 
+          }
+
+          // 🧩 3️⃣ Ambil data token
+          await Promise.all([
+            this.loadTokenData(mint),
+            this.loadTokenInfo(mint)
+          ]);
+
+          // ✅ Langsung set token “From” berdasarkan param mint
+          await this.setDefaultFromToken(mint);
         }
+      });
 
-        this.selectedTokenMint = mint;
+      // 🔹 4️⃣ Subscribe perubahan active wallet
+      this.walletService.getActiveWallet().subscribe(async (addr) => {
+        if (addr) {
+          this.activeWallet = addr;
+          console.log('🔄 Active wallet updated in Home:', addr);
 
-        const saved = localStorage.getItem('walletAddress');
-        if (saved) {
-          this.userAddress = saved;
           await this.updateBalance();
-          this.loadWalletTrades(mint);   // ✅ dipanggil setelah address siap
+          await this.loadTokens();
         }
+      });
 
-        this.loadTokenData(mint);
-        this.loadTokenInfo(mint);
+      // 🔹 5️⃣ Subscribe ke UserService untuk update avatar real-time
+      this.userService.getUser().subscribe(profile => {
+        this.name = profile.name;
+        this.email = profile.email;
+        this.notifyNewItems = profile.notifyNewItems;
+        this.notifyEmail = profile.notifyEmail;
+        this.avatar = profile.avatar;
+      });
+
+      // 🔹 6️⃣ Fetch user profile dari backend
+      const userId = localStorage.getItem('userId');
+      if (userId) {
+        const res: any = await this.http.get(`${environment.apiUrl}/auth/user/${userId}`).toPromise();
+
+        const avatarUrl = res.avatar
+          ? `${environment.baseUrl}${res.avatar}`
+          : 'assets/images/app-logo.jpeg';
+
+        this.userService.setUser({
+          name: res.name,
+          email: res.email,
+          notifyNewItems: res.notifyNewItems || false,
+          notifyEmail: res.notifyEmail || false,
+          avatar: avatarUrl,
+        });
       }
-    });
+    } catch (err) {
+      console.error("❌ Error during ngOnInit:", err);
+
+      // ⚠️ Tampilkan notifikasi error
+      const toast = await this.toastCtrl.create({
+        message: 'Failed to load token data',
+        duration: 2500,
+        position: 'bottom',
+        color: 'danger',
+        icon: 'alert-circle-outline'
+      });
+      await toast.present();
+    } finally {
+      // 🧹 7️⃣ Pastikan loading selalu ditutup
+      if (loading) await loading.dismiss();
+    }
+  }
+
+  async setDefaultFromToken(mint: string) {
+    // pastikan token list sudah ada
+    if (!this.tokens || this.tokens.length === 0) {
+      await this.loadTokens();
+    }
+
+    // cari token sesuai mint dari param
+    const found = this.tokens.find(t => t.mint === mint);
+
+    if (found) {
+      this.selectedFromToken = found;
+      console.log(`🔒 From token locked: ${found.symbol} (${mint})`);
+    } else {
+      console.warn(`⚠️ Token not found for mint ${mint}`);
+    }
+  }
+
+  async loadTokens() {
+    if (!this.activeWallet) return;
+    try {
+      const resp: any = await this.http
+        .get(`${environment.apiUrl}/wallet/tokens/${this.activeWallet}`)
+        .toPromise();
+
+      this.tokens = resp.tokens || [];
+      this.totalBalanceUsd = resp.total;
+      this.totalBalanceSol = resp.totalSol;
+      localStorage.setItem('walletTokens', JSON.stringify(this.tokens));
+    } catch (err) {
+      console.error('Error fetch tokens from API', err);
+      this.router.navigateByUrl('/tabs/offline');
+
+      const cachedTokens = localStorage.getItem('walletTokens');
+      if (cachedTokens) {
+        try {
+          this.tokens = JSON.parse(cachedTokens);
+          console.log("⚡ Loaded tokens from cache");
+        } catch (e) {
+          console.error("❌ Error parse cached tokens", e);
+        }
+      }
+    }
   }
 
   loadTokenData(mint: string, interval: string = '5m') {
@@ -343,15 +558,108 @@ export class TokenPage implements OnInit {
     });
   }
 
-  loadWalletTrades(mint: string) {
+  groupTradesByDate(trades: any[]) {
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+
+    const groups: Record<string, any[]> = {
+      Today: [],
+      Yesterday: [],
+      'Last 7 Days': [],
+      Older: [],
+    };
+
+    for (const t of trades) {
+      if (!t.time) continue;
+      const txDate = new Date(t.time);
+      const diffDays = Math.floor((today.getTime() - txDate.getTime()) / (1000 * 60 * 60 * 24));
+
+      if (diffDays === 0) {
+        groups['Today'].push(t);
+      } else if (diffDays === 1) {
+        groups['Yesterday'].push(t);
+      } else if (diffDays <= 7) {
+        groups['Last 7 Days'].push(t);
+      } else {
+        groups['Older'].push(t);
+      }
+    }
+
+    // Filter group yang kosong
+    this.groupedTrades = Object.entries(groups)
+      .filter(([label, list]) => list.length > 0)
+      .map(([label, list]) => ({ label, trades: list.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()) }));
+  }
+
+  async loadWalletTrades(mint: string) {
     if (!this.userAddress) return;
 
-    this.http.get<any>(`${environment.apiUrl}/wallet/trades/${this.userAddress}?mint=${mint}`).subscribe({
-      next: (res) => {
-        this.trades = res.trades || [];
-      },
-      error: (err) => console.error("❌ Error fetch wallet trades:", err)
+    let loading: HTMLIonLoadingElement | null = null;
+
+    try {
+      loading = await this.loadingCtrl.create({
+        message: 'Loading transactions...',
+        spinner: 'crescent',
+        cssClass: 'custom-loading'
+      });
+      await loading.present();
+
+      const res: any = await this.http
+        .get(`${environment.apiUrl}/wallet/trades/${this.userAddress}?mint=${mint}`)
+        .toPromise();
+
+      this.trades = res?.trades || [];
+      this.groupTradesByDate(this.trades);
+      console.log(`✅ Loaded ${this.trades.length} transactions`);
+    } catch (err) {
+      console.error("❌ Error fetch wallet trades:", err);
+      const toast = await this.toastCtrl.create({
+        message: 'Failed to load transactions',
+        duration: 2000,
+        color: 'danger',
+        position: 'bottom',
+        icon: 'alert-circle-outline'
+      });
+      await toast.present();
+    } finally {
+      if (loading) await loading.dismiss();
+    }
+  }
+
+  // 🔄 Lifecycle yang dipanggil setiap kali halaman muncul kembali
+  async ionViewWillEnter() {
+    console.log('🔄 Page re-entered, reloading trades...');
+    this.route.paramMap.subscribe(async (params) => {
+      let mint = params.get('mint');
+      if (mint) {
+        // 🔁 Jika mint = native SOL, ubah ke WSOL
+        if (mint === "So11111111111111111111111111111111111111111") {
+          mint = "So11111111111111111111111111111111111111112";
+        }
+
+        this.selectedTokenMint = mint;
+
+        const saved = localStorage.getItem('walletAddress');
+        if (saved) {
+          this.userAddress = saved;
+          await this.updateBalance();
+
+          // 🧭 2️⃣ Panggil loadWalletTrades dengan loading di dalamnya
+          await this.loadWalletTrades(mint); 
+        }
+
+        // 🧩 3️⃣ Ambil data token
+        await Promise.all([
+          this.loadTokenData(mint),
+          this.loadTokenInfo(mint)
+        ]);
+
+        // ✅ Langsung set token “From” berdasarkan param mint
+        await this.setDefaultFromToken(mint);
+      }
     });
+
   }
 
   getTradeType(trade: any): string {
@@ -364,7 +672,7 @@ export class TokenPage implements OnInit {
     if (trade.from?.wallet === this.userAddress) {
       return 'Sell';
     }
-    return 'Transfer';
+    return 'Unknown';
   }
 
   async connectWallet() {
@@ -548,6 +856,11 @@ export class TokenPage implements OnInit {
 
   toggleSwapModal() {
     this.showSwapModal = true;
+
+    // Kalau sudah ada param mint (berarti token detail page)
+    if (this.selectedTokenMint) {
+      this.setDefaultFromToken(this.selectedTokenMint);
+    }
   }
 
   resetSwapModal() {
@@ -563,6 +876,14 @@ export class TokenPage implements OnInit {
     }, 300);
   }
 
+  closeTxModal() {
+    this.isClosingTx = true;
+    setTimeout(() => {
+      this.showTxModal = false;
+      this.isClosingTx = false;
+    }, 300);
+  }
+
   selectFromToken(token: any) {
     this.selectedFromToken = token;
   }
@@ -572,85 +893,296 @@ export class TokenPage implements OnInit {
   }
 
   async swapTokens(event: Event) {
-  event.preventDefault();
-  if (
-    !this.swapAmount ||
-    this.swapAmount <= 0 ||
-    this.swapAmount > this.selectedFromToken.amount
-  ) {
-    return;
-  }
+    event.preventDefault();
 
-  try {
-    this.isSwapping = true;
-    this.txSig = null;
-
-    // 1️⃣ Quote dari backend (DFLOW / Jupiter / aggregator)
-    const quoteRes: any = await this.http
-      .post(`${environment.apiUrl}/wallet/swap/quote`, {
-        from: this.userAddress,
-        fromMint: this.selectedFromToken.mint,
-        toMint: this.selectedToToken.mint,
-        amount: this.swapAmount,
-      })
-      .toPromise();
-
-    console.log("✅ DFLOW Quote response:", quoteRes);
-
-    if (!quoteRes.openTransaction) {
-      throw new Error("❌ No openTransaction returned from backend");
+    if (
+      !this.swapAmount ||
+      this.swapAmount <= 0 ||
+      this.swapAmount > this.selectedFromToken.amount
+    ) {
+      return;
     }
 
-    // 2️⃣ Build tx di backend → return base64 string
-    const buildRes: any = await this.http
-      .post(`${environment.apiUrl}/wallet/swap/build`, {
-        from: this.userAddress,
-        openTransaction: quoteRes.openTransaction,
-        fromMint: this.selectedFromToken.mint,
-        toMint: this.selectedToToken.mint,
-      })
-      .toPromise();
+    try {
+      this.isSwapping = true;
+      this.txSig = null;
 
-    if (!buildRes.tx) {
-      throw new Error("❌ No tx returned from backend build step");
+      const WSOL_MINT = "So11111111111111111111111111111111111111112";
+      const DUMMY_SOL_MINT = "So11111111111111111111111111111111111111111";
+
+      const normalizeMint = (mint: string) =>
+        mint === DUMMY_SOL_MINT ? WSOL_MINT : mint;
+
+      // 🧱 1️⃣ Get Quote
+      const quoteRes: any = await this.http.post(
+        `${environment.apiUrl}/wallet/swap/quote`,
+        {
+          from: this.activeWallet,
+          fromMint: normalizeMint(this.selectedFromToken.mint),
+          toMint: normalizeMint(this.selectedToToken.mint),
+          amount: this.swapAmount,
+        }
+      ).toPromise();
+
+      if (!quoteRes?.openTransaction)
+        throw new Error("❌ No openTransaction from backend");
+
+      // 🧱 2️⃣ Build Unsigned Transaction
+      const buildRes: any = await this.http.post(
+        `${environment.apiUrl}/wallet/swap/build`,
+        {
+          from: this.activeWallet,
+          openTransaction: quoteRes.openTransaction,
+          toMint: normalizeMint(this.selectedToToken.mint),
+          fromMint: normalizeMint(this.selectedFromToken.mint),
+          inAmount: quoteRes.inAmount,
+          outAmount: quoteRes.outAmount,
+        }
+      ).toPromise();
+
+      if (!buildRes?.tx) throw new Error("❌ No tx returned from backend build step");
+      this.pendingBuildTx = buildRes;
+
+      // 🪪 3️⃣ Save TX as Pending (use /wallet/send/sign)
+      const signRes: any = await this.http.post(
+        `${environment.apiUrl}/wallet/send/sign`,
+        { tx: buildRes.tx, wallet: this.activeWallet }
+      ).toPromise();
+
+      if (!signRes?.txId)
+        throw new Error("❌ Missing txId from sign response");
+
+      this.pendingTxId = signRes.txId;
+      console.log("💾 Saved pendingTxId:", this.pendingTxId);
+
+      // ✨ 4️⃣ Tampilkan modal tanda tangan
+      this.toggleSignModal();
+      this.signCompleted = false;
+      this.signRejected = false;
+
+      let signedTx: string | null = null;
+
+      // ⏳ 5️⃣ Polling status signature (manual sign)
+      if (signRes?.status === "pending") {
+        console.log("⏳ Waiting for manual signature...");
+
+        for (let i = 0; i < 30; i++) {
+          await new Promise(r => setTimeout(r, 2000));
+
+          const statusRes: any = await this.http
+            .get(`${environment.apiUrl}/wallet/send/status/${this.pendingTxId}`)
+            .toPromise();
+
+          console.log(`... waiting for signature ${i}`);
+
+          if (statusRes?.status === "signed" && statusRes?.signedTx) {
+            console.log("✅ Signature found!");
+            signedTx = statusRes.signedTx;
+            this.signCompleted = true;
+            break;
+          }
+        }
+
+        if (!signedTx) throw new Error("Timeout waiting for signature");
+        this.signedTxBase64 = signedTx;
+      } 
+      else if (signRes?.signedTx) {
+        // langsung signed
+        this.signCompleted = true;
+        this.signedTxBase64 = signRes.signedTx;
+      } 
+      else {
+        throw new Error("❌ Signing failed");
+      }
+
+      // 🔄 6️⃣ Submit Signed Transaction (swap/submit)
+      const submitRes: any = await this.http.post(
+        `${environment.apiUrl}/wallet/swap/submit`,
+        { signedTx: this.signedTxBase64 }
+      ).toPromise();
+
+      if (!submitRes?.signature)
+        throw new Error("❌ No signature from submit response");
+
+      this.txSig = submitRes.signature;
+
+      // 🔃 7️⃣ Refresh balance & token list
+      await this.updateBalance();
+      await this.loadTokens();
+      this.closeSignModal();
+
+      // ✅ 8️⃣ Success Toast
+      const toast = await this.toastCtrl.create({
+        message: `Swap successful! ✅`,
+        duration: 2500,
+        position: "bottom",
+        color: "success",
+        icon: "checkmark-circle-outline",
+        cssClass: "custom-toast",
+      });
+      await toast.present();
+
+    } catch (err: any) {
+      console.error("❌ swapTokens error:", err);
+
+      const toast = await this.toastCtrl.create({
+        message: err.message || `Failed to swap ${this.selectedFromToken.symbol}`,
+        duration: 2500,
+        position: "bottom",
+        color: "danger",
+        icon: "close-circle-outline",
+        cssClass: "custom-toast",
+      });
+      await toast.present();
+
+    } finally {
+      this.isSwapping = false;
+      this.closeSignModal();
     }
-
-    // 3️⃣ Minta Phantom sign → langsung passing base64
-    const signed = await (window as any).solana.signTransaction(buildRes.tx);
-
-    // 4️⃣ Submit ke backend
-    const submitRes: any = await this.http
-      .post(`${environment.apiUrl}/wallet/swap/submit`, {
-        signedTx: signed, // langsung base64 dari Phantom
-      })
-      .toPromise();
-
-    this.txSig = submitRes.signature;
-
-    const toast = await this.toastCtrl.create({
-      message: `Swap successful! ✅`,
-      duration: 2500,
-      position: "bottom",
-      color: "success",
-      icon: "checkmark-circle-outline",
-      cssClass: "custom-toast",
-    });
-    await toast.present();
-  } catch (err) {
-    console.error("❌ swap error:", err);
-    const toast = await this.toastCtrl.create({
-      message: `Swap failed ❌`,
-      duration: 2000,
-      position: "bottom",
-      color: "danger",
-      icon: "close-circle-outline",
-      cssClass: "custom-toast",
-    });
-    await toast.present();
-  } finally {
-    this.isSwapping = false;
   }
-}
+
+  toggleSignModal() {
+    this.showSignModal = true;
+    this.signCompleted = false;
+    this.signRejected = false;
+  }
+
+  closeSignModal() {
+    this.isClosingSign = true;
+    setTimeout(() => {
+      this.showSignModal = false;
+      this.isClosingSign = false;
+    }, 300);
+  }
+
+  cancelSignModal() {
+    this.signRejected = true;
+  }
+
+  // 🪪 Konfirmasi tanda tangan transaksi
+  async confirmSign() {
+    this.isSigning = true;
+    try {
+      console.log("=== 🪪 CONFIRM SIGN START ===");
+
+      const buildRes: any = this.pendingBuildTx;
+      console.log("🧱 Using pending build tx:", buildRes?.tx?.length || 0);
+
+      // 🚀 Kirim request untuk simpan tx ke pending (sign = pending)
+      const signRes: any = await this.http.post(
+        `${environment.apiUrl}/wallet/send/sign`,
+        { tx: buildRes.tx, wallet: this.activeWallet }
+      ).toPromise();
+
+      console.log("📩 Sign response:", signRes);
+
+      // 🆕 Simpan pendingTxId lebih awal agar bisa dipakai manualSignNow()
+      if (signRes?.txId) {
+        this.pendingTxId = signRes.txId;
+        console.log("💾 Saved pendingTxId:", this.pendingTxId);
+      } else {
+        console.warn("⚠️ Backend did not return txId — manual signing may fail!");
+      }
+
+      // ✅ Kalau status masih pending → tunggu sampai manual sign selesai
+      if (signRes?.status === "pending") {
+        console.log("⏳ Waiting for manual signature... (txId:", this.pendingTxId, ")");
+        let signedTx: string | null = null;
+
+        // loop tunggu status signed
+        for (let i = 0; i < 30; i++) {
+          await new Promise((r) => setTimeout(r, 2000)); // tunggu 2 detik per iterasi
+
+          // 🔍 Cek status di backend
+          const statusRes: any = await this.http
+            .get(`${environment.apiUrl}/wallet/send/status/${this.pendingTxId}`)
+            .toPromise();
+
+          console.log(`... still waiting signature ${i}`);
+
+          if (statusRes?.status === "signed" && statusRes?.signedTx) {
+            console.log("✅ Signature found!");
+            signedTx = statusRes.signedTx;
+            break;
+          }
+        }
+
+        if (!signedTx) throw new Error("❌ No signature after waiting.");
+
+        this.signCompleted = true;
+        this.signedTxBase64 = signedTx;
+      }
+
+      // 🧾 Jika backend langsung kirim signedTx (tanpa pending)
+      else if (signRes?.signedTx) {
+        this.signCompleted = true;
+        this.signedTxBase64 = signRes.signedTx;
+      }
+
+      else {
+        throw new Error("❌ Signing failed — no valid response from backend");
+      }
+
+      // 📤 Submit hasil tanda tangan ke blockchain
+      const submitRes: any = await this.http
+        .post(`${environment.apiUrl}/wallet/send/submit`, {
+          signedTx: this.signedTxBase64,
+        })
+        .toPromise();
+
+      console.log("📤 Submit response:", submitRes);
+      this.txSig = submitRes?.signature ?? null;
+      console.log("✅ Final transaction signature:", this.txSig);
+
+    } catch (err) {
+      console.error("❌ confirmSign error:", err);
+      this.signRejected = true;
+    } finally {
+      this.isSigning = false;
+    }
+  }
+
+  // ✍️ Fungsi untuk pengguna menandatangani manual dari modal
+  async manualSignNow() {
+    try {
+      console.log("🖋️ Manual sign started...");
+      console.log("Current pendingTxId:", this.pendingTxId);
+
+      if (!this.pendingTxId) throw new Error("❌ No pending tx ID found");
+
+      // 🪪 Kirim permintaan tanda tangan manual ke backend
+      const manualSignRes: any = await this.http
+        .post(`${environment.apiUrl}/wallet/send/manual-sign`, {
+          txId: this.pendingTxId,
+        })
+        .toPromise();
+
+      console.log("✅ Manual sign response:", manualSignRes);
+
+      if (manualSignRes?.signedTx) {
+        this.signCompleted = true;
+        this.signedTxBase64 = manualSignRes.signedTx;
+        console.log("✅ Transaction signed manually via modal!");
+      } else {
+        throw new Error("❌ No signedTx returned from manual-sign response");
+      }
+    } catch (err) {
+      console.error("❌ manualSignNow error:", err);
+      this.signRejected = true;
+    }
+  }
+
+  setMaxAmount() {
+    if (this.selectedFromToken) {
+      this.swapAmount = this.selectedFromToken.amount;
+    }
+  }
+
+  setHalfAmount() {
+    if (this.selectedFromToken) {
+      this.swapAmount = this.selectedFromToken.amount / 2;
+    }
+  }
 
   async toggleBuyModal() {
     const toast = await this.toastCtrl.create({
@@ -676,5 +1208,53 @@ export class TokenPage implements OnInit {
       this.isClosingTx = false;
       this.selectedTx = null;
     }, 300);
+  }
+
+  async dismissLoading() {
+    if (this.loading) {
+      await this.loading.dismiss();
+      this.loading = null;
+    }
+  }
+
+  // 🔍 Cari token dari jaringan Solana (via Jupiter API)
+  async searchTokenNetwork(query: string): Promise<any[]> {
+    if (!query) return [];
+
+    console.log(`🔍 [searchTokenNetwork] Searching token: "${query}"`);
+    const startTime = Date.now();
+
+    try {
+      const resp: any = await firstValueFrom(
+        this.http.get(`${environment.apiUrl}/token/search?q=${encodeURIComponent(query)}`)
+      );
+
+      const elapsed = Date.now() - startTime;
+      console.log(`⏱️ [searchTokenNetwork] Response time: ${elapsed} ms`);
+      console.log('📦 [searchTokenNetwork] Raw response:', resp);
+
+      // ✅ Solana Tracker pakai "data", bukan "tokens"
+      const data = resp?.data || resp?.tokens || [];
+      console.log(`📊 [searchTokenNetwork] Token count: ${data.length}`);
+
+      const mapped = data.map((t: any) => ({
+        name: t.name,
+        symbol: t.symbol,
+        mint: t.mint,
+        decimals: t.decimals || 9,
+        logoURI: t.image || t.logoURI || 'assets/images/box-item/rank-01.jpg',
+        usdValue: t.priceUsd || 0,
+        liquidity: t.liquidityUsd || 0,
+        volume24h: t.volume_24h || 0,
+        verified: t.verified || false,
+        amount: 0,
+      }));
+
+      console.log('✅ [searchTokenNetwork] Mapped tokens:', mapped);
+      return mapped;
+    } catch (err) {
+      console.error('❌ [searchTokenNetwork] Error searching token on network:', err);
+      return [];
+    }
   }
 }

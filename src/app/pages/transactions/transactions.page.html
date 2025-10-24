@@ -1,117 +1,14 @@
 <div id="wrapper">
     <div id="page" class="pt-40 home-1">
 
-        <div class="flat-pages-title">
+        <div class="flat-pages-title" style="padding-top: 50px;">
             <div class="widget-bg-line">
                 <div class="wraper">
                     <div class="bg-grid-line y bottom">
                         <div class="bg-line"></div>
                     </div>
                 </div>
-            </div>
-            <div class="themesflat-container w1490">
-                <div class="row">
-                    <div class="col-12 pages-title">
-                        <div class="content">
-                            <h1 *ngIf="tokenPriceUsd !== null">
-                              <span [countUp]="tokenPriceUsd" prefix="$" [duration]="2000"></span>
-                            </h1>
-
-                            <h4 class="pb-10" >
-                              <span [ngClass]="trend > 0 ? 'warning' : (trend < 0 ? 'danger' : '')">
-                                {{ trend > 0 ? '+' : ''}}{{ percentChange | number:'1.2-2' }}%
-                              </span>
-                              <i [ngClass]="trend > 0 ? 'icon-arrow-up2 warning' : (trend < 0 ? 'icon-arrow-down2 danger' : '')"></i>
-                            </h4>
-
-                            <div class="chart">
-                                <canvas baseChart
-                                    [data]="chartData"
-                                    [options]="chartOptions"
-                                    [type]="chartType">
-                                </canvas>
-                            </div>
-                        </div>
-
-                        <div class="content">
-                            
-                            <ul class="widget-menu-tab">
-                                <li class="item-title" (click)="toggleSwapModal()">
-                                    <i class="icon-arrow-down2"></i>
-                                    <br>Buy
-                                </li>
-                                <li class="item-title" (click)="toggleSwapModal()">
-                                    <i class="icon-arrow-up2"></i>
-                                    <br>Sell
-                                </li>
-                            </ul>
-                        </div>
-                        <div class="icon-background">
-                            <img class="absolute item1" src="assets/images/item-background/item1.png" alt="">
-                            <img class="absolute item4" src="assets/images/item-background/item1.png" alt="">
-                            <img class="absolute item5" src="assets/images/item-background/item1.png" alt="">
-                            <img class="absolute item8" src="assets/images/item-background/item5.png" alt="">
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="widget-edit mb-30 setting" *ngIf="selectedTokenInfo">
-              <div class="notification-setting-item" *ngIf="selectedTokenInfo.token">
-                <div class="content flex-row">
-                  <span>Name</span>
-                  <span>
-                    <img [src]="selectedTokenInfo.token.image" alt="{{ selectedTokenInfo.token.symbol }}"
-                         style="height:20px; width:20px; margin-right:6px; vertical-align:middle;">
-                    {{ selectedTokenInfo.token.name }} ({{ selectedTokenInfo.token.symbol }})
-                  </span>
-                </div>
-              </div>
-
-              <div class="notification-setting-item">
-                <div class="content flex-row">
-                  <span>Holders</span>
-                  <span>{{ selectedTokenInfo.holders | number }}</span>
-                </div>
-              </div>
-
-              <div class="notification-setting-item" *ngIf="selectedTokenInfo?.pools?.length">
-                <div class="content flex-row">
-                  <span>Price</span>
-                  <span>${{ selectedTokenInfo.pools[0].price.usd | number:'1.2-2' }}</span>
-                </div>
-              </div>
-
-              <div class="notification-setting-item">
-                <div class="content flex-row">
-                  <span>Liquidity</span>
-                  <span>${{ selectedTokenInfo.pools[0].liquidity.usd | number:'1.0-0' }}</span>
-                </div>
-              </div>
-
-              <div class="notification-setting-item">
-                <div class="content flex-row">
-                  <span>Market Cap</span>
-                  <span>${{ selectedTokenInfo.pools[0].marketCap.usd | number:'1.0-0' }}</span>
-                </div>
-              </div>
-
-              <div class="notification-setting-item">
-                <div class="content flex-row">
-                  <span>24h Change</span>
-                  <span [ngClass]="selectedTokenInfo.events['24h'].priceChangePercentage >= 0 ? 'warning' : 'danger'">
-                    {{ selectedTokenInfo.events['24h'].priceChangePercentage | percent:'1.2-2' }}
-                  </span>
-                </div>
-              </div>
-
-              <div class="notification-setting-item">
-                <div class="content flex-row">
-                  <span>Transactions</span>
-                  <span>{{ selectedTokenInfo.txns }} (Buys: {{ selectedTokenInfo.buys }}, Sells: {{ selectedTokenInfo.sells }})</span>
-                </div>
-              </div>
-            </div>
+            </div>          
 
             <div class="widget-trades mb-30" *ngIf="groupedTrades.length > 0">
 
@@ -288,9 +185,7 @@
 
         <!-- Step 1: Pilih Token From -->
         <div *ngIf="!selectedFromToken && !isSwapping && !txSig">
-          <h2 class="modal-title">
-            Swap from <strong>{{ selectedFromToken.symbol }}</strong>
-          </h2>
+          <h2 class="modal-title">Select Token to Swap From</h2>
 
           <!-- 🔍 Search bar (opsional) -->
           <form action="#" method="get" role="search" class="search-form relative" (submit)="$event.preventDefault()">
@@ -303,16 +198,20 @@
 
           <!-- List token pakai template ranking -->
           <div class="widget-table-ranking pb-20" *ngIf="tokens.length > 0">
-            <div class="table-ranking-content" *ngFor="let token of tokens | filter:swapSearchFrom" (click)="selectFromToken(token)">
+            <div
+              class="table-ranking-content"
+              *ngFor="let token of tokens | filter:swapSearchFrom"
+              (click)="selectFromToken(token)"
+            >
               <div data-wow-delay="0s" class="fl-row-ranking">
                 <!-- Kolom kiri: logo + symbol + balance -->
                 <div class="td1">
                   <div class="item-avatar">
-                    <img [src]="token.logoURI || 'assets/images/box-icon/coin-01.png'" alt="{{ token.symbol }}">
+                    <img [src]="token.logoURI || 'assets/images/default-token.png'" alt="{{ token.symbol }}">
                   </div>
                   <div class="item-name">
                     {{ token.symbol }}
-                    <h6 class="price gem pt-10">{{ token.amount }}</h6>
+                    <h6 class="price gem pt-10">Balance: {{ token.amount }}</h6>
                   </div>
                 </div>
 
@@ -347,8 +246,8 @@
 
         <!-- Step 2: Pilih Token To -->
         <div *ngIf="selectedFromToken && !selectedToToken && !isSwapping && !txSig">
-          <h2 class="modal-title">{{ selectedFromToken.symbol }} → Swap To</h2>
-          
+          <h2 class="modal-title">Select Token to Swap To</h2>
+
           <form action="#" method="get" role="search" class="search-form relative" (submit)="$event.preventDefault()">
             <input type="search" class="search-field style-1" placeholder="Search..."
                    [(ngModel)]="swapSearchTo" name="swapSearchTo">
@@ -357,45 +256,16 @@
             </button>
           </form>
 
-          <!-- List token pakai template ranking -->
-          <div class="widget-table-ranking pb-20" *ngIf="tokens.length > 0">
-            <div class="table-ranking-content" *ngFor="let token of tokens | filter:swapSearchTo" (click)="selectToToken(token)">
-              <div data-wow-delay="0s" class="fl-row-ranking" *ngIf="!selectedFromToken || token.mint !== selectedFromToken.mint">
-                <!-- Kolom kiri: logo + symbol + balance -->
-                <div class="td1">
-                  <div class="item-avatar">
-                    <img [src]="token.logoURI || 'assets/images/box-icon/coin-01.png'" alt="{{ token.symbol }}">
-                  </div>
-                  <div class="item-name">
-                    {{ token.symbol }}
-                    <h6 class="price gem pt-10">{{ token.amount }}</h6>
-                  </div>
-                </div>
-
-                <!-- Kolom kanan: nilai USD + trend -->
-                <div class="td5">
-                  <h6 class="price gem">
-                    ${{ token.usdValue || 0 }}
-                    <div class="td4 warning pt-10">
-                      <span
-                        [ngClass]="token.trend > 0 ? 'warning' : (token.trend < 0 ? 'danger' : '')"
-                      >
-                        {{ token.trend > 0 ? '+' : ''}}{{ token.percentChange | number:'1.2-2' }}%
-                      </span>
-                      <i
-                        [ngClass]="
-                          token.trend > 0
-                            ? 'icon-arrow-up2 warning'
-                            : (token.trend < 0 ? 'icon-arrow-down2 danger' : '')
-                        "
-                      ></i>
-                    </div>
-                  </h6>
-                </div>
+          <div class="token-list">
+            <div class="token-item" *ngFor="let token of tokens | filter:swapSearchTo"
+                 (click)="selectToToken(token)">
+              <img [src]="token.logoURI || 'assets/images/default-token.png'" alt="{{token.symbol}}" class="token-logo">
+              <div class="token-info">
+                <strong>{{ token.symbol }}</strong>
+                <small>Balance: {{ token.amount }}</small>
               </div>
             </div>
           </div>
-
           <div class="modal-actions">
             <button class="btn-cancel" (click)="selectedFromToken = null">Back</button>
           </div>
@@ -409,31 +279,15 @@
           <form (submit)="swapTokens($event)">
             <div class="form-group">
               <label for="swapAmount">Amount ({{ selectedFromToken.symbol }})</label>
-              <input
-                type="number"
-                id="swapAmount"
-                [(ngModel)]="swapAmount"
-                name="swapAmount"
-                required
-                min="0"
-                class="search-field style-1"
-              >
-              <p>Balance: {{ selectedFromToken.amount }}</p>
-
-              <!-- Tombol cepat -->
-              <div class="quick-buttons">
-                <button type="button" (click)="setHalfAmount()">50%</button>
-                <button type="button" (click)="setMaxAmount()">Max</button>
-              </div>
+              <input type="number" id="swapAmount" [(ngModel)]="swapAmount"
+                     name="swapAmount" required min="0"
+                     class="search-field style-1">
+              <small>Balance: {{ selectedFromToken.amount }}</small>
             </div>
-
             <div class="modal-actions">
               <button type="button" class="btn-cancel" (click)="selectedToToken = null">Back</button>
-              <button
-                type="submit"
-                class="btn-send"
-                [disabled]="!swapAmount || swapAmount <= 0 || swapAmount > selectedFromToken.amount"
-              >
+              <button type="submit" class="btn-send"
+                      [disabled]="!swapAmount || swapAmount <= 0 || swapAmount > selectedFromToken.amount">
                 Swap
               </button>
             </div>
@@ -462,55 +316,25 @@
       </div>
     </div>
 
-    <!-- 🪪 Transaction Signing Modal -->
-    <div class="custom-modal" *ngIf="showSignModal">
-      <div class="modal-backdrop" (click)="cancelSignModal()"></div>
-
-      <div class="modal-sheet" [ngClass]="{ 'slide-up': !isClosingSign, 'slide-down': isClosingSign }">
-        <div *ngIf="!signCompleted && !signRejected">
-          <h2 class="modal-title">Sign Transaction</h2>
-          <p class="text-center">Please sign this transaction in your Universe Wallet.</p>
-
-          <div class="loading-spinner">
-            <ion-spinner name="crescent"></ion-spinner>
-          </div>
-
-          <p class="text-center small-text">Waiting for signature...</p>
-          <div class="modal-actions">
-            <button type="button" class="btn-cancel" (click)="cancelSignModal()">Cancel</button>
-            <button 
-              type="button"
-              class="btn-send"
-              [disabled]="!pendingTxId || isSigning"
-              (click)="manualSignNow()">
-              Sign Now
-            </button>
-          </div>
-        </div>
-
-        <div *ngIf="signCompleted">
-          <h2 class="modal-title">Transaction Signed ✅</h2>
-          <p>Your transaction has been successfully signed.</p>
-          <div class="modal-actions">
-            <button type="button" class="btn-send" (click)="closeSignModal()">Continue</button>
-          </div>
-        </div>
-
-        <div *ngIf="signRejected">
-          <h2 class="modal-title">Signature Rejected ❌</h2>
-          <p>Signing failed. Please try again.</p>
-          <div class="modal-actions">
-            <button type="button" class="btn-cancel" (click)="closeSignModal()">Close</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <div class="custom-modal" *ngIf="showTxModal">
       <div class="modal-backdrop" (click)="resetTxModal()"></div>
 
       <div class="modal-sheet" [ngClass]="{ 'slide-up': !isClosingTx, 'slide-down': isClosingTx }">
         <h2 class="modal-title">Transaction Detail</h2>
+
+        <!-- === Pair Token Section (khusus SwapToken) === -->
+        <div *ngIf="selectedTx.pairToken" class="flex justify-center items-center mb-20">
+          <div class="flex items-center gap-2">
+            <div class="relative">
+              <img [src]="selectedTx.pairToken.from.image"
+                   [alt]="selectedTx.pairToken.from.symbol"
+                   style="height:40px; width:40px; border-radius:50%; border:2px solid #fff;">
+              <img [src]="selectedTx.pairToken.to.image"
+                   [alt]="selectedTx.pairToken.to.symbol"
+                   style="height:40px; width:40px; border-radius:50%; position:absolute; left:22px; border:2px solid #fff;">
+            </div>
+          </div>
+        </div>
 
         <!-- isi modal -->
         <div class="widget-edit mb-30 setting" *ngIf="selectedTx">
@@ -540,7 +364,7 @@
           </div>
 
           <!-- From -->
-          <div class="notification-setting-item">
+          <div class="notification-setting-item" *ngIf="selectedTx.from">
             <div class="content flex-row">
               <span>From</span>
               <span>
@@ -552,7 +376,7 @@
           </div>
 
           <!-- To -->
-          <div class="notification-setting-item">
+          <div class="notification-setting-item" *ngIf="selectedTx.to">
             <div class="content flex-row">
               <span>To</span>
               <span>

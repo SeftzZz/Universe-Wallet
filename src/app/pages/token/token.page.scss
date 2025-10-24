@@ -402,6 +402,14 @@ i.danger {
   margin-right: 15px;
 }
 
+.widget-trades {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-left: 15px;
+  margin-right: 15px;
+}
+
 .trade-item {
   display: flex;
   justify-content: space-between;
