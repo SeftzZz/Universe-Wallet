@@ -762,7 +762,7 @@ export class HomePage implements OnInit {
 
       // ✅ 8️⃣ Success Toast
       const toast = await this.toastCtrl.create({
-        message: `Swap successful! ✅`,
+        message: `Successful to Swap ${this.selectedFromToken.symbol}`,
         duration: 2500,
         position: "bottom",
         color: "success",
@@ -775,7 +775,7 @@ export class HomePage implements OnInit {
       console.error("❌ swapTokens error:", err);
 
       const toast = await this.toastCtrl.create({
-        message: err.message || `Failed to swap ${this.selectedFromToken.symbol}`,
+        message: `Failed to Swap ${this.selectedFromToken.symbol}`,
         duration: 2500,
         position: "bottom",
         color: "danger",
